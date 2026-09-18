@@ -67,7 +67,8 @@ const coins = [];
 const tunnelRings = [];
 const stars = [];
 
-// Единая 3D-модель игрока. Она находится в верхней части экрана и является источником выстрелов и сбора.
+// Единая 3D-модель игрока. Движется по окружности туннеля вместе с камерой, но камера смещена так,
+// чтобы корабль оставался у верхней границы кадра, а не в центре.
 const player = new THREE.Group();
 const shipBody = new THREE.Mesh(
   new THREE.ConeGeometry(.42, 1.15, 8),
@@ -236,7 +237,6 @@ function createCoin() {
   coins.push(mesh);
 }
 
-// Снаряд рождается на видимом носу верхней 3D-модели и летит вглубь туннеля.
 function fire() {
   if (state !== 'playing' || fireCooldown > 0) return;
   fireCooldown = .17;
@@ -245,7 +245,7 @@ function fire() {
   const material = new THREE.MeshBasicMaterial({ color: 0xd8ffff });
   const shot = new THREE.Mesh(geometry, material);
   shot.position.copy(player.position);
-  shot.position.z = player.position.z - .85;
+  shot.position.z -= .85;
   shot.userData = { life: 2.2 };
   projectiles.push(shot);
   scene.add(shot);
@@ -314,11 +314,9 @@ function updatePlayer(dt) {
   playerAngularVelocity = THREE.MathUtils.damp(playerAngularVelocity, desired * 3.4, 10, dt);
   playerAngle += playerAngularVelocity * dt;
 
-  // Корабль закреплён сверху в кадре, но отклоняется по X от кругового движения.
-  player.position.x = THREE.MathUtils.damp(player.position.x, Math.sin(playerAngle) * 1.7, 6, dt);
-  player.position.y = THREE.MathUtils.damp(player.position.y, 2.55 + Math.cos(playerAngle) * .35, 6, dt);
-  player.position.z = -1.2;
-  player.rotation.z = THREE.MathUtils.damp(player.rotation.z, -playerAngularVelocity * .16, 8, dt);
+  positionOnTunnel(player, playerAngle, PLAYER_RADIUS);
+  player.position.z = .6;
+  player.rotation.z = playerAngle - Math.PI / 2;
   player.rotation.x = Math.sin(elapsed * 4) * .08;
   shipBody.rotation.y += dt * 1.6;
 
@@ -334,9 +332,14 @@ function updatePlayer(dt) {
   collectorRing.material.opacity = .55 + collectT * .45;
   collectorRing.rotation.z += dt * (3 + collectT * 10);
 
-  camera.position.set(0, -.15, 5.8);
-  camera.rotation.set(0, 0, 0);
-  camera.lookAt(0, 0, -23);
+  const cameraRadius = 2.4;
+  const cameraAngle = playerAngle;
+  camera.position.x = Math.cos(cameraAngle) * cameraRadius;
+  camera.position.y = Math.sin(cameraAngle) * cameraRadius - 3.1;
+  camera.position.z = 6.6;
+  camera.rotation.z = THREE.MathUtils.damp(camera.rotation.z, playerAngle - Math.PI / 2, 5, dt);
+  camera.lookAt(player.position.x, player.position.y - .55, player.position.z - 20);
+  camera.rotateZ(playerAngle - Math.PI / 2);
 }
 
 function updateTunnel(dt, speed) {
@@ -386,8 +389,8 @@ function updateHazards(dt, speed) {
       continue;
     }
 
-    const distanceToShip = hazard.position.distanceTo(player.position);
-    if (hazard.position.z > -1.8 && hazard.position.z < 1.8 && distanceToShip < data.hitRadius + .8) {
+    const angularDistance = Math.abs(Math.atan2(Math.sin(playerAngle - data.angle), Math.cos(playerAngle - data.angle)));
+    if (hazard.position.z > -.8 && hazard.position.z < 2.1 && angularDistance < data.angularWidth + .15) {
       damage(data.type === 'barrier' ? 32 : data.type === 'blob' ? 24 : 21);
       removeEntity(hazard, hazards);
     }
@@ -401,7 +404,12 @@ function updateCoins(dt, speed) {
     coin.rotation.z += dt * 4;
     coin.rotation.x += dt * 2;
 
-    if (!data.magnetized && coin.position.distanceTo(player.position) < 4.4) data.magnetized = true;
+    const angularDistance = Math.abs(Math.atan2(Math.sin(playerAngle - data.angle), Math.cos(playerAngle - data.angle)));
+    const closeInDepth = coin.position.z > -3 && coin.position.z < 3;
+
+    if (!data.magnetized && closeInDepth && angularDistance < .5) {
+      data.magnetized = true;
+    }
 
     if (data.magnetized) {
       coin.position.x = THREE.MathUtils.damp(coin.position.x, player.position.x, 9, dt);
@@ -416,7 +424,7 @@ function updateCoins(dt, speed) {
       continue;
     }
 
-    if (coin.position.distanceTo(player.position) < 1.05) {
+    if (coin.position.distanceTo(player.position) < .95) {
       collectCoin(data.value);
       blast(coin.position, 0xffe14d, 12);
       pulseLight.intensity = 9;
@@ -580,7 +588,7 @@ restartButton.addEventListener('click', beginGame);
 
 makeTunnel();
 makeStars();
-player.position.set(0, 2.55, -1.2);
+positionOnTunnel(player, playerAngle, PLAYER_RADIUS);
 updateCoinHud();
 statusNode.textContent = 'ОЖИДАНИЕ ВХОДА';
 requestAnimationFrame(animate);
