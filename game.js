@@ -67,8 +67,10 @@ const coins = [];
 const tunnelRings = [];
 const stars = [];
 
-// Единая 3D-модель игрока. Движется по окружности туннеля вместе с камерой, но камера смещена так,
-// чтобы корабль оставался у верхней границы кадра, а не в центре.
+// Единая 3D-модель игрока. Её позиция и поворот ЗАФИКСИРОВАНЫ в кадре: A/D управляют только камерой,
+// то есть визуально вращается сам туннель вокруг закреплённого корабля.
+const SHIP_FIXED_ANGLE = Math.PI / 2;
+
 const player = new THREE.Group();
 const shipBody = new THREE.Mesh(
   new THREE.ConeGeometry(.42, 1.15, 8),
@@ -146,7 +148,7 @@ function createBarrier() {
   positionOnTunnel(mesh, angle, radius);
   mesh.position.z = -105;
   mesh.rotation.z = angle + Math.PI / 2;
-  mesh.userData = { type: 'barrier', angle, angularWidth: width, radius, drift: (Math.random() - .5) * .3, spin: (Math.random() - .5) * 2.2, hitRadius: 1.2, hp: 1, value: 40 };
+  mesh.userData = { type: 'barrier', angle, angularWidth: width, radius, drift: (Math.random() - .5) * .3, spin: (Math.random() - .5) * 2.2, hitRadius: 1.7, hp: 1, value: 40 };
   world.add(mesh);
   hazards.push(mesh);
 }
@@ -181,7 +183,7 @@ function createBlock() {
   const radius = TUNNEL_RADIUS - 1.3;
   positionOnTunnel(mesh, angle, radius);
   mesh.position.z = -102;
-  mesh.userData = { type: 'block', angle, angularWidth: .16, radius, drift: (Math.random() > .5 ? 1 : -1) * (.25 + Math.random() * .4), hitRadius: .92, hp: 2, value: 90 };
+  mesh.userData = { type: 'block', angle, angularWidth: .16, radius, drift: (Math.random() > .5 ? 1 : -1) * (.25 + Math.random() * .4), hitRadius: 1.35, hp: 2, value: 90 };
   world.add(mesh);
   hazards.push(mesh);
 }
@@ -209,7 +211,7 @@ function createBlob() {
   mesh.position.z = -110;
   mesh.userData = {
     type: 'blob', angle, angularWidth: .22, radius, hp: 2, value: 180,
-    drift: (Math.random() - .5) * .5, wobble: Math.random() * 10, hitRadius: .95,
+    drift: (Math.random() - .5) * .5, wobble: Math.random() * 10, hitRadius: 1.15,
     basePositions, noise
   };
   world.add(mesh);
@@ -314,9 +316,9 @@ function updatePlayer(dt) {
   playerAngularVelocity = THREE.MathUtils.damp(playerAngularVelocity, desired * 3.4, 10, dt);
   playerAngle += playerAngularVelocity * dt;
 
-  positionOnTunnel(player, playerAngle, PLAYER_RADIUS);
+  positionOnTunnel(player, SHIP_FIXED_ANGLE, PLAYER_RADIUS);
   player.position.z = .6;
-  player.rotation.z = playerAngle - Math.PI / 2;
+  player.rotation.z = SHIP_FIXED_ANGLE - Math.PI / 2;
   player.rotation.x = Math.sin(elapsed * 4) * .08;
   shipBody.rotation.y += dt * 1.6;
 
@@ -333,13 +335,13 @@ function updatePlayer(dt) {
   collectorRing.rotation.z += dt * (3 + collectT * 10);
 
   const cameraRadius = 2.4;
-  const cameraAngle = playerAngle;
+  const cameraAngle = SHIP_FIXED_ANGLE - playerAngle;
   camera.position.x = Math.cos(cameraAngle) * cameraRadius;
   camera.position.y = Math.sin(cameraAngle) * cameraRadius - 3.1;
   camera.position.z = 6.6;
-  camera.rotation.z = THREE.MathUtils.damp(camera.rotation.z, playerAngle - Math.PI / 2, 5, dt);
+  camera.rotation.z = THREE.MathUtils.damp(camera.rotation.z, SHIP_FIXED_ANGLE - playerAngle - Math.PI / 2, 5, dt);
   camera.lookAt(player.position.x, player.position.y - .55, player.position.z - 20);
-  camera.rotateZ(playerAngle - Math.PI / 2);
+  camera.rotateZ(SHIP_FIXED_ANGLE - playerAngle - Math.PI / 2);
 }
 
 function updateTunnel(dt, speed) {
@@ -452,15 +454,18 @@ function updateProjectiles(dt) {
     }
 
     for (const hazard of [...hazards]) {
-      if (projectile.position.distanceTo(hazard.position) < hazard.userData.hitRadius) {
-        hazard.userData.hp -= 1;
+      const hazardData = hazard.userData;
+      const angularDistance = Math.abs(Math.atan2(Math.sin(playerAngle - hazardData.angle), Math.cos(playerAngle - hazardData.angle)));
+      const depthClose = Math.abs(projectile.position.z - hazard.position.z) < hazardData.hitRadius + .4;
+      if (angularDistance < (hazardData.angularWidth || .25) + .2 && depthClose) {
+        hazardData.hp -= 1;
         removeEntity(projectile, projectiles);
         pulseLight.intensity = 8;
-        if (hazard.userData.hp <= 0) {
-          score += hazard.userData.value;
-          const debrisColor = hazard.userData.type === 'blob' ? 0x39ff8c
-            : hazard.userData.type === 'barrier' ? 0xff3d9a
-            : hazard.userData.type === 'block' ? 0xa855f7
+        if (hazardData.hp <= 0) {
+          score += hazardData.value;
+          const debrisColor = hazardData.type === 'blob' ? 0x39ff8c
+            : hazardData.type === 'barrier' ? 0xff3d9a
+            : hazardData.type === 'block' ? 0xa855f7
             : 0x8cf9ff;
           blast(hazard.position, debrisColor, 17);
           removeEntity(hazard, hazards);
@@ -588,7 +593,7 @@ restartButton.addEventListener('click', beginGame);
 
 makeTunnel();
 makeStars();
-positionOnTunnel(player, playerAngle, PLAYER_RADIUS);
+positionOnTunnel(player, SHIP_FIXED_ANGLE, PLAYER_RADIUS);
 updateCoinHud();
 statusNode.textContent = 'ОЖИДАНИЕ ВХОДА';
 requestAnimationFrame(animate);
