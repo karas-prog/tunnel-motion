@@ -23,30 +23,7 @@
     </div>
 
     <div id="crosshair" class="crosshair" aria-hidden="true"><span></span></div>
-
     <div id="level-banner" class="level-banner" aria-hidden="true">УРОВЕНЬ <span id="level-banner-value">2</span></div>
-
-    <div id="ship-indicator" class="ship-indicator" aria-hidden="true">
-      <svg id="ship-icon" viewBox="0 0 120 120" class="ship-icon">
-        <defs>
-          <linearGradient id="shipBodyGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="#eef8ff" />
-            <stop offset="100%" stop-color="#46e6ff" />
-          </linearGradient>
-          <radialGradient id="shipCoreGlow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stop-color="#ffffff" />
-            <stop offset="100%" stop-color="#c4ff51" />
-          </radialGradient>
-        </defs>
-        <circle id="ship-collect-ring" cx="60" cy="60" r="52" fill="none" stroke="#ffe14d" stroke-width="3" opacity="0" />
-        <polygon points="60,14 103.7,45.8 87,97.2 33,97.2 16.3,45.8" fill="url(#shipBodyGradient)" stroke="#0af0ff" stroke-width="2.5" stroke-linejoin="round" />
-        <polygon points="60,14 103.7,45.8 60,60" fill="#ff4fa3" opacity="0.55" />
-        <polygon points="60,14 16.3,45.8 60,60" fill="#ff4fa3" opacity="0.4" />
-        <polygon points="87,97.2 33,97.2 60,60" fill="#7118ff" opacity="0.5" />
-        <circle cx="60" cy="60" r="10" fill="url(#shipCoreGlow)" />
-        <polygon id="ship-muzzle" points="52,20 60,2 68,20" fill="#d8ffff" opacity="0" />
-      </svg>
-    </div>
 
     <section id="start-screen" class="overlay active">
       <div class="panel">

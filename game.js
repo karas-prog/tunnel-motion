@@ -16,9 +16,6 @@ const statusNode = document.querySelector('#status');
 const startButton = document.querySelector('#start-button');
 const resumeButton = document.querySelector('#resume-button');
 const restartButton = document.querySelector('#restart-button');
-const shipIcon = document.querySelector('#ship-icon');
-const shipMuzzle = document.querySelector('#ship-muzzle');
-const shipCollectRing = document.querySelector('#ship-collect-ring');
 
 const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(0x080017, 0.018);
@@ -45,7 +42,6 @@ const TUNNEL_RADIUS = 9.7;
 const PLAYER_RADIUS = 7.25;
 const WORLD_SPEED = 17;
 const COINS_PER_LEVEL = 10;
-const SHIP_BASE_RADIUS = 46;
 const keys = new Set();
 
 let state = 'menu';
@@ -59,8 +55,6 @@ let coinTimer = 0;
 let elapsed = 0;
 let shake = 0;
 let lastTime = 0;
-let shipFlash = 0;
-let collectFlash = 0;
 let shipMuzzleFlash = 0;
 let shipCollectPulse = 0;
 let coinsCollected = 0;
@@ -73,33 +67,32 @@ const coins = [];
 const tunnelRings = [];
 const stars = [];
 
-// Игровой корабль-коллектор: летит вперёд, собирает монеты и стреляет по кляксам.
+// Единая 3D-модель игрока. Она находится в верхней части экрана и является источником выстрелов и сбора.
 const player = new THREE.Group();
 const shipBody = new THREE.Mesh(
-  new THREE.ConeGeometry(.34, .95, 8),
-  new THREE.MeshStandardMaterial({ color: 0xeef8ff, emissive: 0x46e6ff, emissiveIntensity: 3.6, roughness: .16, metalness: .8 })
+  new THREE.ConeGeometry(.42, 1.15, 8),
+  new THREE.MeshStandardMaterial({ color: 0xeef8ff, emissive: 0x46e6ff, emissiveIntensity: 3.8, roughness: .16, metalness: .8 })
 );
 shipBody.rotation.x = Math.PI / 2;
 const shipFin = new THREE.Mesh(
-  new THREE.TorusGeometry(.5, .05, 8, 20),
+  new THREE.TorusGeometry(.58, .06, 8, 20),
   new THREE.MeshBasicMaterial({ color: 0xff4fa3, transparent: true, opacity: .92 })
 );
 shipFin.rotation.x = Math.PI / 2;
-shipFin.position.z = .18;
+shipFin.position.z = .24;
 const collectorRing = new THREE.Mesh(
-  new THREE.TorusGeometry(.82, .035, 6, 26),
+  new THREE.TorusGeometry(.98, .045, 6, 26),
   new THREE.MeshBasicMaterial({ color: 0xc4ff51, transparent: true, opacity: .55 })
 );
 collectorRing.rotation.x = Math.PI / 2;
-// Дуло-вспышка на носу 3D-корабля: невидима по умолчанию, вспыхивает синхронно с выстрелом.
 const shipMuzzleFlare = new THREE.Mesh(
-  new THREE.ConeGeometry(.22, .5, 10),
+  new THREE.ConeGeometry(.25, .65, 10),
   new THREE.MeshBasicMaterial({ color: 0xd8ffff, transparent: true, opacity: 0 })
 );
 shipMuzzleFlare.rotation.x = -Math.PI / 2;
-shipMuzzleFlare.position.z = -.62;
-const shipMuzzleLight = new THREE.PointLight(0xd8ffff, 0, 6, 2);
-shipMuzzleLight.position.z = -.7;
+shipMuzzleFlare.position.z = -.78;
+const shipMuzzleLight = new THREE.PointLight(0xd8ffff, 0, 7, 2);
+shipMuzzleLight.position.z = -.85;
 player.add(shipBody, shipFin, collectorRing, shipMuzzleFlare, shipMuzzleLight);
 scene.add(player);
 
@@ -142,7 +135,6 @@ function positionOnTunnel(object, angle, radius = PLAYER_RADIUS) {
   object.position.y = Math.sin(angle) * radius;
 }
 
-// Барьер: разрушаемое препятствие, требует одного попадания.
 function createBarrier() {
   const angle = Math.random() * Math.PI * 2;
   const width = .3 + Math.random() * .26;
@@ -180,7 +172,6 @@ function createEye() {
   hazards.push(group);
 }
 
-// Многогранник: разрушаемое препятствие, требует двух попаданий.
 function createBlock() {
   const angle = Math.random() * Math.PI * 2;
   const geometry = new THREE.DodecahedronGeometry(.82, 0);
@@ -194,7 +185,6 @@ function createBlock() {
   hazards.push(mesh);
 }
 
-// Бесформенная клякса: деформированная сфера со случайным шумом вершин и органическим покачиванием.
 function createBlob() {
   const angle = Math.random() * Math.PI * 2;
   const geometry = new THREE.IcosahedronGeometry(.62, 2);
@@ -233,7 +223,6 @@ function spawnHazard() {
   else createBlob();
 }
 
-// Собираемая монета: вращающийся сияющий диск, притягивающийся к кораблю в радиусе коллектора.
 function createCoin() {
   const angle = Math.random() * Math.PI * 2;
   const geometry = new THREE.TorusGeometry(.26, .09, 8, 16);
@@ -247,17 +236,16 @@ function createCoin() {
   coins.push(mesh);
 }
 
-// Выстрел: создаёт снаряд и включает вспышку на носу и 3D-модели, и HUD-иконки.
+// Снаряд рождается на видимом носу верхней 3D-модели и летит вглубь туннеля.
 function fire() {
   if (state !== 'playing' || fireCooldown > 0) return;
   fireCooldown = .17;
-  shipFlash = .18;
   shipMuzzleFlash = .16;
   const geometry = new THREE.SphereGeometry(.14, 8, 8);
   const material = new THREE.MeshBasicMaterial({ color: 0xd8ffff });
   const shot = new THREE.Mesh(geometry, material);
   shot.position.copy(player.position);
-  shot.position.z = -.45;
+  shot.position.z = player.position.z - .85;
   shot.userData = { life: 2.2 };
   projectiles.push(shot);
   scene.add(shot);
@@ -292,11 +280,9 @@ function damage(amount) {
   if (health <= 0) endGame();
 }
 
-// Обработка сбора монеты: увеличивает счёт очков и прогресс до следующего уровня, запускает пульс коллектора.
 function collectCoin(value) {
   score += value;
   coinsCollected += 1;
-  collectFlash = .32;
   shipCollectPulse = .32;
   if (coinsCollected >= COINS_PER_LEVEL) {
     coinsCollected -= COINS_PER_LEVEL;
@@ -327,54 +313,30 @@ function updatePlayer(dt) {
   const desired = (right ? -1 : 0) + (left ? 1 : 0);
   playerAngularVelocity = THREE.MathUtils.damp(playerAngularVelocity, desired * 3.4, 10, dt);
   playerAngle += playerAngularVelocity * dt;
-  positionOnTunnel(player, playerAngle);
-  player.position.z = .6;
-  player.rotation.z = playerAngle - Math.PI / 2;
-  player.rotation.x = Math.sin(elapsed * 4) * .09;
+
+  // Корабль закреплён сверху в кадре, но отклоняется по X от кругового движения.
+  player.position.x = THREE.MathUtils.damp(player.position.x, Math.sin(playerAngle) * 1.7, 6, dt);
+  player.position.y = THREE.MathUtils.damp(player.position.y, 2.55 + Math.cos(playerAngle) * .35, 6, dt);
+  player.position.z = -1.2;
+  player.rotation.z = THREE.MathUtils.damp(player.rotation.z, -playerAngularVelocity * .16, 8, dt);
+  player.rotation.x = Math.sin(elapsed * 4) * .08;
   shipBody.rotation.y += dt * 1.6;
 
-  // Вспышка дула на 3D-модели: конус растёт и гаснет, точечный свет усиливает эффект попадания.
   shipMuzzleFlash = Math.max(0, shipMuzzleFlash - dt);
   const muzzleT = shipMuzzleFlash / .16;
   shipMuzzleFlare.material.opacity = muzzleT;
   shipMuzzleFlare.scale.setScalar(.6 + muzzleT * 1.1);
   shipMuzzleLight.intensity = muzzleT * 4;
 
-  // Пульс коллекторного кольца на 3D-модели при сборе монеты: резкое расширение и яркая вспышка.
   shipCollectPulse = Math.max(0, shipCollectPulse - dt);
   const collectT = shipCollectPulse / .32;
   collectorRing.scale.setScalar(1 + collectT * .9);
   collectorRing.material.opacity = .55 + collectT * .45;
   collectorRing.rotation.z += dt * (3 + collectT * 10);
 
-  const cameraRadius = 1.1;
-  camera.position.x = Math.cos(playerAngle) * cameraRadius;
-  camera.position.y = Math.sin(playerAngle) * cameraRadius;
-  camera.position.z = 4.8;
-  camera.rotation.z = THREE.MathUtils.damp(camera.rotation.z, playerAngle - Math.PI / 2, 5, dt);
+  camera.position.set(0, -.15, 5.8);
+  camera.rotation.set(0, 0, 0);
   camera.lookAt(0, 0, -23);
-  camera.rotateZ(playerAngle - Math.PI / 2);
-}
-
-// Обновление 2D-иконки корабля внизу экрана: наклон, выстрел из носа и вспышка сбора монет.
-function updateShipIcon(dt) {
-  if (!shipIcon) return;
-  const tilt = THREE.MathUtils.clamp(-playerAngularVelocity * 9, -32, 32);
-  const bob = state === 'playing' ? Math.sin(elapsed * 5) * 3 : Math.sin(elapsed * 1.4) * 2;
-  shipIcon.style.transform = `translateY(${bob}px) rotate(${tilt}deg)`;
-
-  shipFlash = Math.max(0, shipFlash - dt);
-  const glow = 12 + shipFlash * 40;
-  shipIcon.style.filter = `drop-shadow(0 0 ${glow}px rgba(70, 230, 255, .85)) drop-shadow(0 0 22px rgba(255, 79, 163, .35))`;
-  if (shipMuzzle) shipMuzzle.style.opacity = shipFlash > 0 ? Math.min(1, shipFlash * 6).toString() : '0';
-
-  collectFlash = Math.max(0, collectFlash - dt);
-  if (shipCollectRing) {
-    const progress = 1 - collectFlash / .32;
-    shipCollectRing.style.opacity = collectFlash > 0 ? (1 - progress).toString() : '0';
-    shipCollectRing.setAttribute('r', (SHIP_BASE_RADIUS + progress * 22).toString());
-    shipCollectRing.setAttribute('stroke-width', (4 - progress * 3).toString());
-  }
 }
 
 function updateTunnel(dt, speed) {
@@ -424,8 +386,8 @@ function updateHazards(dt, speed) {
       continue;
     }
 
-    const angularDistance = Math.abs(Math.atan2(Math.sin(playerAngle - data.angle), Math.cos(playerAngle - data.angle)));
-    if (hazard.position.z > -.8 && hazard.position.z < 2.1 && angularDistance < data.angularWidth + .15) {
+    const distanceToShip = hazard.position.distanceTo(player.position);
+    if (hazard.position.z > -1.8 && hazard.position.z < 1.8 && distanceToShip < data.hitRadius + .8) {
       damage(data.type === 'barrier' ? 32 : data.type === 'blob' ? 24 : 21);
       removeEntity(hazard, hazards);
     }
@@ -439,12 +401,7 @@ function updateCoins(dt, speed) {
     coin.rotation.z += dt * 4;
     coin.rotation.x += dt * 2;
 
-    const angularDistance = Math.abs(Math.atan2(Math.sin(playerAngle - data.angle), Math.cos(playerAngle - data.angle)));
-    const closeInDepth = coin.position.z > -3 && coin.position.z < 3;
-
-    if (!data.magnetized && closeInDepth && angularDistance < .5) {
-      data.magnetized = true;
-    }
+    if (!data.magnetized && coin.position.distanceTo(player.position) < 4.4) data.magnetized = true;
 
     if (data.magnetized) {
       coin.position.x = THREE.MathUtils.damp(coin.position.x, player.position.x, 9, dt);
@@ -459,7 +416,7 @@ function updateCoins(dt, speed) {
       continue;
     }
 
-    if (coin.position.distanceTo(player.position) < .85) {
+    if (coin.position.distanceTo(player.position) < 1.05) {
       collectCoin(data.value);
       blast(coin.position, 0xffe14d, 12);
       pulseLight.intensity = 9;
@@ -468,7 +425,6 @@ function updateCoins(dt, speed) {
   }
 }
 
-// Обработка попаданий снарядов: глаза и кляксы требуют hp-урона, барьеры и блоки разрушаются аналогично.
 function updateProjectiles(dt) {
   for (const projectile of [...projectiles]) {
     const data = projectile.userData;
@@ -588,7 +544,6 @@ function animate(time) {
     collectorRing.rotation.z += dt * .5;
   }
 
-  updateShipIcon(dt);
   updateTunnel(dt, ambientSpeed);
   pulseLight.intensity = THREE.MathUtils.damp(pulseLight.intensity, 5.5, 5, dt);
   pulseLight.color.setHSL(.51 + Math.sin(time * .001) * .05, .95, .62);
@@ -625,7 +580,7 @@ restartButton.addEventListener('click', beginGame);
 
 makeTunnel();
 makeStars();
-positionOnTunnel(player, playerAngle);
+player.position.set(0, 2.55, -1.2);
 updateCoinHud();
 statusNode.textContent = 'ОЖИДАНИЕ ВХОДА';
 requestAnimationFrame(animate);
