@@ -69,8 +69,8 @@ const tunnelRings = [];
 const stars = [];
 const worldPlayerPosition = new THREE.Vector3();
 
-// Единая 3D-модель игрока — подвешена к камере. Смещена ВВЕРХ по локальной оси Y (1.35),
-// поэтому визуально корабль летит у верхней части туннеля, а не по центру кадра.
+// Единая 3D-модель игрока — подвешена к камере. Отодвинута дальше (Z=-5.6) и смещена
+// к верхнему краю кадра ближе к боковой стороне (X=1.6, Y=1.75), а не к центру.
 const player = new THREE.Group();
 const shipBody = new THREE.Mesh(
   new THREE.ConeGeometry(.42, 1.15, 8),
@@ -97,7 +97,7 @@ shipMuzzleFlare.position.z = -.78;
 const shipMuzzleLight = new THREE.PointLight(0xd8ffff, 0, 7, 2);
 shipMuzzleLight.position.z = -.85;
 player.add(shipBody, shipFin, collectorRing, shipMuzzleFlare, shipMuzzleLight);
-player.position.set(0, 1.35, -3.4);
+player.position.set(1.6, 1.75, -5.6);
 camera.add(player);
 
 function makeTunnel() {
@@ -405,16 +405,16 @@ function updateCoins(dt, speed) {
     coin.rotation.x += dt * 2;
 
     const angularDistance = Math.abs(Math.atan2(Math.sin(playerAngle - data.angle), Math.cos(playerAngle - data.angle)));
-    const closeInDepth = coin.position.z > -3 && coin.position.z < 3;
+    const closeInDepth = coin.position.z > -4 && coin.position.z < 4;
 
-    if (!data.magnetized && closeInDepth && angularDistance < .5) {
+    if (!data.magnetized && closeInDepth && angularDistance < .7) {
       data.magnetized = true;
     }
 
     if (data.magnetized) {
-      coin.position.x = THREE.MathUtils.damp(coin.position.x, worldPlayerPosition.x, 9, dt);
-      coin.position.y = THREE.MathUtils.damp(coin.position.y, worldPlayerPosition.y, 9, dt);
-      coin.position.z = THREE.MathUtils.damp(coin.position.z, worldPlayerPosition.z, 9, dt);
+      coin.position.x = THREE.MathUtils.damp(coin.position.x, worldPlayerPosition.x, 16, dt);
+      coin.position.y = THREE.MathUtils.damp(coin.position.y, worldPlayerPosition.y, 16, dt);
+      coin.position.z = THREE.MathUtils.damp(coin.position.z, worldPlayerPosition.z, 16, dt);
     } else {
       positionOnTunnel(coin, data.angle, data.radius);
     }
@@ -424,7 +424,7 @@ function updateCoins(dt, speed) {
       continue;
     }
 
-    if (coin.position.distanceTo(worldPlayerPosition) < 1.1) {
+    if (coin.position.distanceTo(worldPlayerPosition) < 1.4) {
       collectCoin(data.value);
       blast(coin.position, 0xffe14d, 12);
       pulseLight.intensity = 9;
