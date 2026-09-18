@@ -61,6 +61,8 @@ let shake = 0;
 let lastTime = 0;
 let shipFlash = 0;
 let collectFlash = 0;
+let shipMuzzleFlash = 0;
+let shipCollectPulse = 0;
 let coinsCollected = 0;
 let level = 1;
 let levelSpeedBoost = 1;
@@ -89,7 +91,16 @@ const collectorRing = new THREE.Mesh(
   new THREE.MeshBasicMaterial({ color: 0xc4ff51, transparent: true, opacity: .55 })
 );
 collectorRing.rotation.x = Math.PI / 2;
-player.add(shipBody, shipFin, collectorRing);
+// Дуло-вспышка на носу 3D-корабля: невидима по умолчанию, вспыхивает синхронно с выстрелом.
+const shipMuzzleFlare = new THREE.Mesh(
+  new THREE.ConeGeometry(.22, .5, 10),
+  new THREE.MeshBasicMaterial({ color: 0xd8ffff, transparent: true, opacity: 0 })
+);
+shipMuzzleFlare.rotation.x = -Math.PI / 2;
+shipMuzzleFlare.position.z = -.62;
+const shipMuzzleLight = new THREE.PointLight(0xd8ffff, 0, 6, 2);
+shipMuzzleLight.position.z = -.7;
+player.add(shipBody, shipFin, collectorRing, shipMuzzleFlare, shipMuzzleLight);
 scene.add(player);
 
 function makeTunnel() {
@@ -236,10 +247,12 @@ function createCoin() {
   coins.push(mesh);
 }
 
+// Выстрел: создаёт снаряд и включает вспышку на носу и 3D-модели, и HUD-иконки.
 function fire() {
   if (state !== 'playing' || fireCooldown > 0) return;
   fireCooldown = .17;
   shipFlash = .18;
+  shipMuzzleFlash = .16;
   const geometry = new THREE.SphereGeometry(.14, 8, 8);
   const material = new THREE.MeshBasicMaterial({ color: 0xd8ffff });
   const shot = new THREE.Mesh(geometry, material);
@@ -279,11 +292,12 @@ function damage(amount) {
   if (health <= 0) endGame();
 }
 
-// Обработка сбора монеты: увеличивает счёт очков и прогресс до следующего уровня.
+// Обработка сбора монеты: увеличивает счёт очков и прогресс до следующего уровня, запускает пульс коллектора.
 function collectCoin(value) {
   score += value;
   coinsCollected += 1;
   collectFlash = .32;
+  shipCollectPulse = .32;
   if (coinsCollected >= COINS_PER_LEVEL) {
     coinsCollected -= COINS_PER_LEVEL;
     levelUp();
@@ -317,8 +331,21 @@ function updatePlayer(dt) {
   player.position.z = .6;
   player.rotation.z = playerAngle - Math.PI / 2;
   player.rotation.x = Math.sin(elapsed * 4) * .09;
-  collectorRing.rotation.z += dt * 3;
   shipBody.rotation.y += dt * 1.6;
+
+  // Вспышка дула на 3D-модели: конус растёт и гаснет, точечный свет усиливает эффект попадания.
+  shipMuzzleFlash = Math.max(0, shipMuzzleFlash - dt);
+  const muzzleT = shipMuzzleFlash / .16;
+  shipMuzzleFlare.material.opacity = muzzleT;
+  shipMuzzleFlare.scale.setScalar(.6 + muzzleT * 1.1);
+  shipMuzzleLight.intensity = muzzleT * 4;
+
+  // Пульс коллекторного кольца на 3D-модели при сборе монеты: резкое расширение и яркая вспышка.
+  shipCollectPulse = Math.max(0, shipCollectPulse - dt);
+  const collectT = shipCollectPulse / .32;
+  collectorRing.scale.setScalar(1 + collectT * .9);
+  collectorRing.material.opacity = .55 + collectT * .45;
+  collectorRing.rotation.z += dt * (3 + collectT * 10);
 
   const cameraRadius = 1.1;
   camera.position.x = Math.cos(playerAngle) * cameraRadius;
