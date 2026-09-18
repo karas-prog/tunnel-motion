@@ -46,26 +46,36 @@ let playerAngle = 0;
 let playerAngularVelocity = 0;
 let fireCooldown = 0;
 let spawnTimer = 0;
+let coinTimer = 0;
 let elapsed = 0;
 let shake = 0;
 let lastTime = 0;
 
 const projectiles = [];
 const hazards = [];
+const coins = [];
 const tunnelRings = [];
 const stars = [];
 
+// Игровой корабль-коллектор: летит вперёд, собирает монеты и стреляет по кляксам.
 const player = new THREE.Group();
-const playerCore = new THREE.Mesh(
-  new THREE.IcosahedronGeometry(.42, 1),
-  new THREE.MeshStandardMaterial({ color: 0xeef8ff, emissive: 0x46e6ff, emissiveIntensity: 4, roughness: .18, metalness: .75 })
+const shipBody = new THREE.Mesh(
+  new THREE.ConeGeometry(.34, .95, 8),
+  new THREE.MeshStandardMaterial({ color: 0xeef8ff, emissive: 0x46e6ff, emissiveIntensity: 3.6, roughness: .16, metalness: .8 })
 );
-const playerHalo = new THREE.Mesh(
-  new THREE.TorusGeometry(.68, .07, 8, 24),
-  new THREE.MeshBasicMaterial({ color: 0xff4fa3, transparent: true, opacity: .9 })
+shipBody.rotation.x = Math.PI / 2;
+const shipFin = new THREE.Mesh(
+  new THREE.TorusGeometry(.5, .05, 8, 20),
+  new THREE.MeshBasicMaterial({ color: 0xff4fa3, transparent: true, opacity: .92 })
 );
-playerHalo.rotation.x = Math.PI / 2;
-player.add(playerCore, playerHalo);
+shipFin.rotation.x = Math.PI / 2;
+shipFin.position.z = .18;
+const collectorRing = new THREE.Mesh(
+  new THREE.TorusGeometry(.82, .035, 6, 26),
+  new THREE.MeshBasicMaterial({ color: 0xc4ff51, transparent: true, opacity: .55 })
+);
+collectorRing.rotation.x = Math.PI / 2;
+player.add(shipBody, shipFin, collectorRing);
 scene.add(player);
 
 function makeTunnel() {
@@ -157,11 +167,57 @@ function createBlock() {
   hazards.push(mesh);
 }
 
+// Бесформенная клякса: деформированная сфера со случайным шумом вершин и органическим покачиванием.
+function createBlob() {
+  const angle = Math.random() * Math.PI * 2;
+  const geometry = new THREE.IcosahedronGeometry(.62, 2);
+  const positionAttr = geometry.attributes.position;
+  const noise = [];
+  for (let i = 0; i < positionAttr.count; i += 1) {
+    const vertex = new THREE.Vector3().fromBufferAttribute(positionAttr, i);
+    const offset = .82 + Math.random() * .4;
+    vertex.normalize().multiplyScalar(offset);
+    positionAttr.setXYZ(i, vertex.x, vertex.y, vertex.z);
+    noise.push(.5 + Math.random());
+  }
+  geometry.computeVertexNormals();
+  const palette = [0x39ff8c, 0xff5d3d, 0xffe14d, 0x6bffe0];
+  const color = palette[Math.floor(Math.random() * palette.length)];
+  const material = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.4, roughness: .55, metalness: .05, flatShading: true });
+  const mesh = new THREE.Mesh(geometry, material);
+  const basePositions = positionAttr.array.slice();
+  const radius = TUNNEL_RADIUS - (1.1 + Math.random() * .9);
+  positionOnTunnel(mesh, angle, radius);
+  mesh.position.z = -110;
+  mesh.userData = {
+    type: 'blob', angle, angularWidth: .22, radius, hp: 2, value: 180,
+    drift: (Math.random() - .5) * .5, wobble: Math.random() * 10, hitRadius: .95,
+    basePositions, noise
+  };
+  world.add(mesh);
+  hazards.push(mesh);
+}
+
 function spawnHazard() {
   const roll = Math.random();
-  if (roll < .45) createBarrier();
-  else if (roll < .75) createBlock();
-  else createEye();
+  if (roll < .3) createBarrier();
+  else if (roll < .5) createBlock();
+  else if (roll < .72) createEye();
+  else createBlob();
+}
+
+// Собираемая монета: вращающийся сияющий диск, притягивающийся к кораблю в радиусе коллектора.
+function createCoin() {
+  const angle = Math.random() * Math.PI * 2;
+  const geometry = new THREE.TorusGeometry(.26, .09, 8, 16);
+  const material = new THREE.MeshStandardMaterial({ color: 0xffe14d, emissive: 0xffb100, emissiveIntensity: 2.4, roughness: .2, metalness: .85 });
+  const mesh = new THREE.Mesh(geometry, material);
+  const radius = TUNNEL_RADIUS - (.9 + Math.random() * 1.6);
+  positionOnTunnel(mesh, angle, radius);
+  mesh.position.z = -115;
+  mesh.userData = { type: 'coin', angle, radius, value: 60, magnetized: false };
+  world.add(mesh);
+  coins.push(mesh);
 }
 
 function fire() {
@@ -216,8 +272,8 @@ function updatePlayer(dt) {
   player.position.z = .6;
   player.rotation.z = playerAngle - Math.PI / 2;
   player.rotation.x = Math.sin(elapsed * 4) * .09;
-  playerHalo.rotation.z += dt * 3;
-  playerCore.rotation.y += dt * 2.2;
+  collectorRing.rotation.z += dt * 3;
+  shipBody.rotation.y += dt * 1.6;
 
   const cameraRadius = 1.1;
   camera.position.x = Math.cos(playerAngle) * cameraRadius;
@@ -251,6 +307,20 @@ function updateHazards(dt, speed) {
       hazard.rotation.z = data.angle + (data.type === 'barrier' ? Math.PI / 2 : 0);
       hazard.rotation.x += (data.spin || .8) * dt;
       hazard.rotation.y += .8 * dt;
+    } else if (data.type === 'blob') {
+      data.angle += (data.drift || 0) * dt;
+      positionOnTunnel(hazard, data.angle, data.radius);
+      hazard.rotation.y += dt * .6;
+      hazard.rotation.x = Math.sin(elapsed * 1.6 + data.wobble) * .3;
+      const positionAttr = hazard.geometry.attributes.position;
+      for (let i = 0; i < positionAttr.count; i += 1) {
+        const bx = data.basePositions[i * 3];
+        const by = data.basePositions[i * 3 + 1];
+        const bz = data.basePositions[i * 3 + 2];
+        const pulse = 1 + Math.sin(elapsed * 3 + data.noise[i] * 6) * .14;
+        positionAttr.setXYZ(i, bx * pulse, by * pulse, bz * pulse);
+      }
+      positionAttr.needsUpdate = true;
     } else {
       hazard.scale.setScalar(1 + Math.sin(elapsed * 5 + data.pulse) * .14);
       hazard.rotation.y += dt * 1.2;
@@ -263,8 +333,44 @@ function updateHazards(dt, speed) {
 
     const angularDistance = Math.abs(Math.atan2(Math.sin(playerAngle - data.angle), Math.cos(playerAngle - data.angle)));
     if (hazard.position.z > -.8 && hazard.position.z < 2.1 && angularDistance < data.angularWidth + .15) {
-      damage(data.type === 'barrier' ? 32 : 21);
+      damage(data.type === 'barrier' ? 32 : data.type === 'blob' ? 24 : 21);
       removeEntity(hazard, hazards);
+    }
+  }
+}
+
+function updateCoins(dt, speed) {
+  for (const coin of [...coins]) {
+    const data = coin.userData;
+    coin.position.z += speed * dt;
+    coin.rotation.z += dt * 4;
+    coin.rotation.x += dt * 2;
+
+    const angularDistance = Math.abs(Math.atan2(Math.sin(playerAngle - data.angle), Math.cos(playerAngle - data.angle)));
+    const closeInDepth = coin.position.z > -3 && coin.position.z < 3;
+
+    if (!data.magnetized && closeInDepth && angularDistance < .5) {
+      data.magnetized = true;
+    }
+
+    if (data.magnetized) {
+      coin.position.x = THREE.MathUtils.damp(coin.position.x, player.position.x, 9, dt);
+      coin.position.y = THREE.MathUtils.damp(coin.position.y, player.position.y, 9, dt);
+      coin.position.z = THREE.MathUtils.damp(coin.position.z, player.position.z, 9, dt);
+    } else {
+      positionOnTunnel(coin, data.angle, data.radius);
+    }
+
+    if (coin.position.z > 6) {
+      removeEntity(coin, coins);
+      continue;
+    }
+
+    if (coin.position.distanceTo(player.position) < .85) {
+      score += data.value;
+      blast(coin.position, 0xffe14d, 12);
+      pulseLight.intensity = 9;
+      removeEntity(coin, coins);
     }
   }
 }
@@ -288,14 +394,14 @@ function updateProjectiles(dt) {
     }
 
     for (const hazard of [...hazards]) {
-      if (hazard.userData.type !== 'eye') continue;
+      if (hazard.userData.type !== 'eye' && hazard.userData.type !== 'blob') continue;
       if (projectile.position.distanceTo(hazard.position) < hazard.userData.hitRadius) {
         hazard.userData.hp -= 1;
         removeEntity(projectile, projectiles);
         pulseLight.intensity = 8;
         if (hazard.userData.hp <= 0) {
           score += hazard.userData.value;
-          blast(hazard.position, 0x8cf9ff, 17);
+          blast(hazard.position, hazard.userData.type === 'blob' ? 0x39ff8c : 0x8cf9ff, 17);
           removeEntity(hazard, hazards);
         }
         break;
@@ -312,6 +418,7 @@ function updateHud(speed) {
 function clearGameObjects() {
   for (const item of [...hazards]) removeEntity(item, hazards);
   for (const item of [...projectiles]) removeEntity(item, projectiles);
+  for (const item of [...coins]) removeEntity(item, coins);
 }
 
 function beginGame() {
@@ -322,6 +429,7 @@ function beginGame() {
   playerAngularVelocity = 0;
   elapsed = 0;
   spawnTimer = .8;
+  coinTimer = .4;
   healthBar.style.width = '100%';
   healthBar.style.background = 'linear-gradient(90deg, #46e6ff, #c4ff51, #ff4fa3)';
   state = 'playing';
@@ -364,12 +472,18 @@ function animate(time) {
       spawnHazard();
       spawnTimer = Math.max(.4, 1.24 - elapsed * .007) + Math.random() * .5;
     }
+    coinTimer -= dt;
+    if (coinTimer <= 0) {
+      createCoin();
+      coinTimer = .5 + Math.random() * .6;
+    }
     updatePlayer(dt);
     updateHazards(dt, ambientSpeed);
+    updateCoins(dt, ambientSpeed);
     updateProjectiles(dt);
     updateHud(ambientSpeed);
   } else {
-    playerHalo.rotation.z += dt * .5;
+    collectorRing.rotation.z += dt * .5;
   }
 
   updateTunnel(dt, ambientSpeed);
