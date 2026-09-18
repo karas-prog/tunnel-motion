@@ -45,12 +45,28 @@ const WORLD_SPEED = 17;
 const COINS_PER_LEVEL = 10;
 const keys = new Set();
 
+// Таблица прогрессии оружия по уровням: скорострельность, урон, число снарядов в залпе, разброс.
+const WEAPON_LEVELS = [
+  { fireRate: .62, damage: 1, shots: 1, spread: 0 },
+  { fireRate: .48, damage: 1, shots: 1, spread: 0 },
+  { fireRate: .48, damage: 1, shots: 2, spread: .12 },
+  { fireRate: .4, damage: 2, shots: 2, spread: .12 },
+  { fireRate: .34, damage: 2, shots: 3, spread: .16 },
+  { fireRate: .28, damage: 3, shots: 3, spread: .18 },
+];
+
+function weaponForLevel(lvl) {
+  const index = Math.min(lvl - 1, WEAPON_LEVELS.length - 1);
+  return WEAPON_LEVELS[index];
+}
+
 let state = 'menu';
 let score = 0;
 let health = 100;
 let playerAngle = 0;
 let playerAngularVelocity = 0;
 let fireCooldown = 0;
+let autoFireCooldown = 0;
 let spawnTimer = 0;
 let coinTimer = 0;
 let elapsed = 0;
@@ -61,6 +77,7 @@ let shipCollectPulse = 0;
 let coinsCollected = 0;
 let level = 1;
 let levelSpeedBoost = 1;
+let weapon = weaponForLevel(1);
 
 const projectiles = [];
 const hazards = [];
@@ -69,8 +86,6 @@ const tunnelRings = [];
 const stars = [];
 const worldPlayerPosition = new THREE.Vector3();
 
-// Единая 3D-модель игрока — подвешена к камере. Масштаб всей модели уменьшен (0.62),
-// чтобы корабль визуально был компактнее относительно туннеля.
 const player = new THREE.Group();
 const shipBody = new THREE.Mesh(
   new THREE.ConeGeometry(.42, 1.15, 8),
@@ -241,9 +256,8 @@ function createCoin() {
   coins.push(mesh);
 }
 
-function fire() {
-  if (state !== 'playing' || fireCooldown > 0) return;
-  fireCooldown = .17;
+// Единый метод создания снаряда с учётом урона оружия и углового разброса.
+function spawnProjectile(spreadOffset = 0) {
   shipMuzzleFlash = .16;
   const muzzleWorld = new THREE.Vector3();
   shipMuzzleFlare.getWorldPosition(muzzleWorld);
@@ -251,10 +265,37 @@ function fire() {
   const material = new THREE.MeshBasicMaterial({ color: 0xd8ffff });
   const shot = new THREE.Mesh(geometry, material);
   shot.position.copy(muzzleWorld);
-  shot.userData = { life: 2.2 };
+  shot.userData = { life: 2.2, damage: weapon.damage, angleOffset: spreadOffset };
   projectiles.push(shot);
   scene.add(shot);
   pulseLight.intensity = 10;
+}
+
+// Веерный залп: количество снарядов и разброс зависят от текущего уровня оружия.
+function fireVolley() {
+  const half = (weapon.shots - 1) / 2;
+  for (let i = 0; i < weapon.shots; i += 1) {
+    const offset = (i - half) * weapon.spread;
+    spawnProjectile(offset);
+  }
+}
+
+// Ручной выстрел по пробелу/клику — усиленный залп с собственным кулдауном.
+function fire() {
+  if (state !== 'playing' || fireCooldown > 0) return;
+  fireCooldown = Math.max(.12, weapon.fireRate * .7);
+  fireVolley();
+}
+
+// Автоатака: корабль сам стреляет по расписанию, определяемому уровнем оружия,
+// независимо от ручного управления, пока враги находятся в туннеле.
+function updateAutoFire(dt) {
+  autoFireCooldown = Math.max(0, autoFireCooldown - dt);
+  if (autoFireCooldown > 0) return;
+  if (hazards.some((h) => h.userData.type === 'eye' || h.userData.type === 'blob')) {
+    fireVolley();
+  }
+  autoFireCooldown = weapon.fireRate;
 }
 
 function removeEntity(entity, list) {
@@ -296,9 +337,11 @@ function collectCoin(value) {
   updateCoinHud();
 }
 
+// Повышение уровня обновляет и скорость мира, и параметры оружия по таблице WEAPON_LEVELS.
 function levelUp() {
   level += 1;
   levelSpeedBoost = 1 + (level - 1) * .12;
+  weapon = weaponForLevel(level);
   levelNode.textContent = level.toString();
   levelBannerValue.textContent = level.toString();
   health = Math.min(100, health + 15);
@@ -434,6 +477,7 @@ function updateCoins(dt, speed) {
   }
 }
 
+// Урон снаряда теперь берётся из data.damage (зависит от уровня оружия на момент выстрела).
 function updateProjectiles(dt) {
   for (const projectile of [...projectiles]) {
     const data = projectile.userData;
@@ -454,10 +498,10 @@ function updateProjectiles(dt) {
 
     for (const hazard of [...hazards]) {
       const hazardData = hazard.userData;
-      const angularDistance = Math.abs(Math.atan2(Math.sin(playerAngle - hazardData.angle), Math.cos(playerAngle - hazardData.angle)));
+      const angularDistance = Math.abs(Math.atan2(Math.sin(playerAngle + (data.angleOffset || 0) - hazardData.angle), Math.cos(playerAngle + (data.angleOffset || 0) - hazardData.angle)));
       const depthClose = Math.abs(projectile.position.z - hazard.position.z) < hazardData.hitRadius + .4;
-      if (angularDistance < (hazardData.angularWidth || .25) + .2 && depthClose) {
-        hazardData.hp -= 1;
+      if (angularDistance < (hazardData.angularWidth || .25) + .22 && depthClose) {
+        hazardData.hp -= data.damage || 1;
         removeEntity(projectile, projectiles);
         pulseLight.intensity = 8;
         if (hazardData.hp <= 0) {
@@ -498,6 +542,8 @@ function beginGame() {
   coinsCollected = 0;
   level = 1;
   levelSpeedBoost = 1;
+  weapon = weaponForLevel(1);
+  autoFireCooldown = weapon.fireRate;
   levelNode.textContent = '1';
   updateCoinHud();
   healthBar.style.width = '100%';
@@ -537,6 +583,7 @@ function animate(time) {
     elapsed += dt;
     score += dt * 42 * (ambientSpeed / WORLD_SPEED);
     fireCooldown = Math.max(0, fireCooldown - dt);
+    updateAutoFire(dt);
     spawnTimer -= dt;
     if (spawnTimer <= 0) {
       spawnHazard();
