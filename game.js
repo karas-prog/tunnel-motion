@@ -25,6 +25,7 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPrefere
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setClearColor(0x080017);
+scene.add(camera);
 
 const world = new THREE.Group();
 scene.add(world);
@@ -66,11 +67,11 @@ const hazards = [];
 const coins = [];
 const tunnelRings = [];
 const stars = [];
+const worldPlayerPosition = new THREE.Vector3();
 
-// Единая 3D-модель игрока. Её позиция и поворот ЗАФИКСИРОВАНЫ в кадре: A/D управляют только камерой,
-// то есть визуально вращается сам туннель вокруг закреплённого корабля.
-const SHIP_FIXED_ANGLE = Math.PI / 2;
-
+// Единая 3D-модель игрока — ПОДВЕШЕНА К КАМЕРЕ, а не к сцене. Её локальная позиция/поворот
+// внутри камеры не меняются, поэтому на экране она абсолютно неподвижна при любом вращении камеры,
+// как прицел в шутере от первого лица. Мировая позиция для коллизий берётся через getWorldPosition().
 const player = new THREE.Group();
 const shipBody = new THREE.Mesh(
   new THREE.ConeGeometry(.42, 1.15, 8),
@@ -97,7 +98,8 @@ shipMuzzleFlare.position.z = -.78;
 const shipMuzzleLight = new THREE.PointLight(0xd8ffff, 0, 7, 2);
 shipMuzzleLight.position.z = -.85;
 player.add(shipBody, shipFin, collectorRing, shipMuzzleFlare, shipMuzzleLight);
-scene.add(player);
+player.position.set(0, -1.55, -3.4);
+camera.add(player);
 
 function makeTunnel() {
   const geometry = new THREE.TorusGeometry(TUNNEL_RADIUS, .09, 8, 44);
@@ -211,7 +213,7 @@ function createBlob() {
   mesh.position.z = -110;
   mesh.userData = {
     type: 'blob', angle, angularWidth: .22, radius, hp: 2, value: 180,
-    drift: (Math.random() - .5) * .5, wobble: Math.random() * 10, hitRadius: 1.15,
+    drift: (Math.random() - .5) * .5, wobble: Math.random() * 10, hitRadius: .95,
     basePositions, noise
   };
   world.add(mesh);
@@ -239,15 +241,17 @@ function createCoin() {
   coins.push(mesh);
 }
 
+// Снаряд стартует из мировой позиции носа корабля (getWorldPosition), а не из локальных координат.
 function fire() {
   if (state !== 'playing' || fireCooldown > 0) return;
   fireCooldown = .17;
   shipMuzzleFlash = .16;
+  const muzzleWorld = new THREE.Vector3();
+  shipMuzzleFlare.getWorldPosition(muzzleWorld);
   const geometry = new THREE.SphereGeometry(.14, 8, 8);
   const material = new THREE.MeshBasicMaterial({ color: 0xd8ffff });
   const shot = new THREE.Mesh(geometry, material);
-  shot.position.copy(player.position);
-  shot.position.z -= .85;
+  shot.position.copy(muzzleWorld);
   shot.userData = { life: 2.2 };
   projectiles.push(shot);
   scene.add(shot);
@@ -278,7 +282,7 @@ function damage(amount) {
   healthBar.style.width = `${health}%`;
   healthBar.style.background = health > 40 ? 'linear-gradient(90deg, #46e6ff, #c4ff51, #ff4fa3)' : 'linear-gradient(90deg, #ffcc4d, #ff3d70)';
   shake = .36;
-  blast(player.position, 0xff4fa3, 18);
+  blast(worldPlayerPosition, 0xff4fa3, 18);
   if (health <= 0) endGame();
 }
 
@@ -309,18 +313,14 @@ function updateCoinHud() {
   coinCountNode.textContent = `${coinsCollected} / ${COINS_PER_LEVEL}`;
 }
 
+// Только камера вращается вокруг оси туннеля по playerAngle. Корабль — дочерний объект камеры
+// с постоянной локальной позицией, поэтому визуально он абсолютно статичен на экране.
 function updatePlayer(dt) {
   const left = keys.has('ArrowLeft') || keys.has('KeyA');
   const right = keys.has('ArrowRight') || keys.has('KeyD');
   const desired = (right ? -1 : 0) + (left ? 1 : 0);
   playerAngularVelocity = THREE.MathUtils.damp(playerAngularVelocity, desired * 3.4, 10, dt);
   playerAngle += playerAngularVelocity * dt;
-
-  positionOnTunnel(player, SHIP_FIXED_ANGLE, PLAYER_RADIUS);
-  player.position.z = .6;
-  player.rotation.z = SHIP_FIXED_ANGLE - Math.PI / 2;
-  player.rotation.x = Math.sin(elapsed * 4) * .08;
-  shipBody.rotation.y += dt * 1.6;
 
   shipMuzzleFlash = Math.max(0, shipMuzzleFlash - dt);
   const muzzleT = shipMuzzleFlash / .16;
@@ -333,15 +333,17 @@ function updatePlayer(dt) {
   collectorRing.scale.setScalar(1 + collectT * .9);
   collectorRing.material.opacity = .55 + collectT * .45;
   collectorRing.rotation.z += dt * (3 + collectT * 10);
+  shipBody.rotation.y += dt * 1.6;
 
   const cameraRadius = 2.4;
-  const cameraAngle = SHIP_FIXED_ANGLE - playerAngle;
-  camera.position.x = Math.cos(cameraAngle) * cameraRadius;
-  camera.position.y = Math.sin(cameraAngle) * cameraRadius - 3.1;
+  camera.position.x = Math.cos(playerAngle) * cameraRadius;
+  camera.position.y = Math.sin(playerAngle) * cameraRadius - 3.1;
   camera.position.z = 6.6;
-  camera.rotation.z = THREE.MathUtils.damp(camera.rotation.z, SHIP_FIXED_ANGLE - playerAngle - Math.PI / 2, 5, dt);
-  camera.lookAt(player.position.x, player.position.y - .55, player.position.z - 20);
-  camera.rotateZ(SHIP_FIXED_ANGLE - playerAngle - Math.PI / 2);
+  camera.rotation.set(0, 0, 0);
+  camera.lookAt(0, -.55, -20);
+  camera.rotateZ(playerAngle - Math.PI / 2);
+
+  player.getWorldPosition(worldPlayerPosition);
 }
 
 function updateTunnel(dt, speed) {
@@ -414,9 +416,9 @@ function updateCoins(dt, speed) {
     }
 
     if (data.magnetized) {
-      coin.position.x = THREE.MathUtils.damp(coin.position.x, player.position.x, 9, dt);
-      coin.position.y = THREE.MathUtils.damp(coin.position.y, player.position.y, 9, dt);
-      coin.position.z = THREE.MathUtils.damp(coin.position.z, player.position.z, 9, dt);
+      coin.position.x = THREE.MathUtils.damp(coin.position.x, worldPlayerPosition.x, 9, dt);
+      coin.position.y = THREE.MathUtils.damp(coin.position.y, worldPlayerPosition.y, 9, dt);
+      coin.position.z = THREE.MathUtils.damp(coin.position.z, worldPlayerPosition.z, 9, dt);
     } else {
       positionOnTunnel(coin, data.angle, data.radius);
     }
@@ -426,7 +428,7 @@ function updateCoins(dt, speed) {
       continue;
     }
 
-    if (coin.position.distanceTo(player.position) < .95) {
+    if (coin.position.distanceTo(worldPlayerPosition) < 1.1) {
       collectCoin(data.value);
       blast(coin.position, 0xffe14d, 12);
       pulseLight.intensity = 9;
@@ -555,6 +557,7 @@ function animate(time) {
     updateHud(ambientSpeed);
   } else {
     collectorRing.rotation.z += dt * .5;
+    player.getWorldPosition(worldPlayerPosition);
   }
 
   updateTunnel(dt, ambientSpeed);
@@ -593,7 +596,7 @@ restartButton.addEventListener('click', beginGame);
 
 makeTunnel();
 makeStars();
-positionOnTunnel(player, SHIP_FIXED_ANGLE, PLAYER_RADIUS);
+player.getWorldPosition(worldPlayerPosition);
 updateCoinHud();
 statusNode.textContent = 'ОЖИДАНИЕ ВХОДА';
 requestAnimationFrame(animate);
