@@ -45,14 +45,23 @@ const WORLD_SPEED = 17;
 const COINS_PER_LEVEL = 10;
 const keys = new Set();
 
-// Таблица прогрессии оружия по уровням: скорострельность, урон, число снарядов в залпе, разброс.
+const TUNNEL_BEND_AMOUNT = 1.5;
+const TUNNEL_BEND_FREQ = 0.045;
+
+function tunnelBendOffset(z) {
+  return {
+    x: Math.sin(z * TUNNEL_BEND_FREQ) * TUNNEL_BEND_AMOUNT,
+    y: Math.cos(z * TUNNEL_BEND_FREQ * 0.7) * TUNNEL_BEND_AMOUNT * 0.6,
+  };
+}
+
 const WEAPON_LEVELS = [
-  { fireRate: .62, damage: 1, shots: 1, spread: 0 },
-  { fireRate: .48, damage: 1, shots: 1, spread: 0 },
-  { fireRate: .48, damage: 1, shots: 2, spread: .12 },
-  { fireRate: .4, damage: 2, shots: 2, spread: .12 },
-  { fireRate: .34, damage: 2, shots: 3, spread: .16 },
-  { fireRate: .28, damage: 3, shots: 3, spread: .18 },
+  { fireRate: 0.62, damage: 1, shots: 1, spread: 0 },
+  { fireRate: 0.48, damage: 1, shots: 1, spread: 0 },
+  { fireRate: 0.48, damage: 1, shots: 2, spread: 0.12 },
+  { fireRate: 0.4, damage: 2, shots: 2, spread: 0.12 },
+  { fireRate: 0.34, damage: 2, shots: 3, spread: 0.16 },
+  { fireRate: 0.28, damage: 3, shots: 3, spread: 0.18 },
 ];
 
 function weaponForLevel(lvl) {
@@ -88,54 +97,56 @@ const worldPlayerPosition = new THREE.Vector3();
 
 const player = new THREE.Group();
 const shipBody = new THREE.Mesh(
-  new THREE.ConeGeometry(.42, 1.15, 8),
-  new THREE.MeshStandardMaterial({ color: 0xeef8ff, emissive: 0x46e6ff, emissiveIntensity: 3.8, roughness: .16, metalness: .8 })
+  new THREE.ConeGeometry(0.42, 1.15, 8),
+  new THREE.MeshStandardMaterial({ color: 0xeef8ff, emissive: 0x46e6ff, emissiveIntensity: 3.8, roughness: 0.16, metalness: 0.8 })
 );
 shipBody.rotation.x = Math.PI / 2;
 const shipFin = new THREE.Mesh(
-  new THREE.TorusGeometry(.58, .06, 8, 20),
-  new THREE.MeshBasicMaterial({ color: 0xff4fa3, transparent: true, opacity: .92 })
+  new THREE.TorusGeometry(0.58, 0.06, 8, 20),
+  new THREE.MeshBasicMaterial({ color: 0xff4fa3, transparent: true, opacity: 0.92 })
 );
 shipFin.rotation.x = Math.PI / 2;
-shipFin.position.z = .24;
+shipFin.position.z = 0.24;
 const collectorRing = new THREE.Mesh(
-  new THREE.TorusGeometry(.98, .045, 6, 26),
-  new THREE.MeshBasicMaterial({ color: 0xc4ff51, transparent: true, opacity: .55 })
+  new THREE.TorusGeometry(0.98, 0.045, 6, 26),
+  new THREE.MeshBasicMaterial({ color: 0xc4ff51, transparent: true, opacity: 0.55 })
 );
 collectorRing.rotation.x = Math.PI / 2;
 const shipMuzzleFlare = new THREE.Mesh(
-  new THREE.ConeGeometry(.25, .65, 10),
+  new THREE.ConeGeometry(0.25, 0.65, 10),
   new THREE.MeshBasicMaterial({ color: 0xd8ffff, transparent: true, opacity: 0 })
 );
 shipMuzzleFlare.rotation.x = -Math.PI / 2;
-shipMuzzleFlare.position.z = -.78;
+shipMuzzleFlare.position.z = -0.78;
 const shipMuzzleLight = new THREE.PointLight(0xd8ffff, 0, 7, 2);
-shipMuzzleLight.position.z = -.85;
+shipMuzzleLight.position.z = -0.85;
 player.add(shipBody, shipFin, collectorRing, shipMuzzleFlare, shipMuzzleLight);
 player.position.set(1.6, 1.75, -5.6);
-player.scale.setScalar(.62);
+player.scale.setScalar(0.44);
 camera.add(player);
 
 function makeTunnel() {
-  const geometry = new THREE.TorusGeometry(TUNNEL_RADIUS, .09, 8, 44);
+  const geometry = new THREE.TorusGeometry(TUNNEL_RADIUS, 0.09, 8, 44);
   for (let i = 0; i < 28; i += 1) {
     const material = new THREE.MeshBasicMaterial({
       color: i % 3 === 0 ? 0xff4fa3 : i % 2 ? 0x46e6ff : 0xa855f7,
       transparent: true,
-      opacity: .24
+      opacity: 0.24
     });
     const ring = new THREE.Mesh(geometry, material);
-    ring.position.z = -i * 5.2;
-    ring.rotation.z = i * .31;
-    ring.userData.phase = i * .73;
+    const z = -i * 5.2;
+    const bend = tunnelBendOffset(z);
+    ring.position.set(bend.x, bend.y, z);
+    ring.rotation.z = i * 0.31;
+    ring.userData.phase = i * 0.73;
     tunnelRings.push(ring);
     world.add(ring);
   }
 }
 
 function makeStars() {
-  const geometry = new THREE.SphereGeometry(.027, 5, 5);
-  const material = new THREE.MeshBasicMaterial({ color: 0xd9f7ff, transparent: true, opacity: .72 });
+  const geometry = new THREE.SphereGeometry(0.027, 5, 5);
+  const material = new THREE.MeshBasicMaterial({ color: 0xd9f7ff, transparent: true, opacity: 0.72 });
   for (let i = 0; i < 240; i += 1) {
     const star = new THREE.Mesh(geometry, material);
     resetStar(star, true);
@@ -157,15 +168,15 @@ function positionOnTunnel(object, angle, radius = PLAYER_RADIUS) {
 
 function createBarrier() {
   const angle = Math.random() * Math.PI * 2;
-  const width = .3 + Math.random() * .26;
-  const geometry = new THREE.BoxGeometry(2.1, .62, .44);
-  const material = new THREE.MeshStandardMaterial({ color: 0xff3d9a, emissive: 0x79003f, emissiveIntensity: 2, roughness: .25, metalness: .7 });
+  const width = 0.3 + Math.random() * 0.26;
+  const geometry = new THREE.BoxGeometry(2.1, 0.62, 0.44);
+  const material = new THREE.MeshStandardMaterial({ color: 0xff3d9a, emissive: 0x79003f, emissiveIntensity: 2, roughness: 0.25, metalness: 0.7 });
   const mesh = new THREE.Mesh(geometry, material);
-  const radius = TUNNEL_RADIUS - .72;
+  const radius = TUNNEL_RADIUS - 0.72;
   positionOnTunnel(mesh, angle, radius);
   mesh.position.z = -105;
   mesh.rotation.z = angle + Math.PI / 2;
-  mesh.userData = { type: 'barrier', angle, angularWidth: width, radius, drift: (Math.random() - .5) * .3, spin: (Math.random() - .5) * 2.2, hitRadius: 1.7, hp: 1, value: 40 };
+  mesh.userData = { type: 'barrier', angle, angularWidth: width, radius, drift: (Math.random() - 0.5) * 0.3, spin: (Math.random() - 0.5) * 2.2, hitRadius: 1.7, hp: 1, value: 40 };
   world.add(mesh);
   hazards.push(mesh);
 }
@@ -174,61 +185,61 @@ function createEye() {
   const angle = Math.random() * Math.PI * 2;
   const group = new THREE.Group();
   const iris = new THREE.Mesh(
-    new THREE.SphereGeometry(.68, 18, 12),
-    new THREE.MeshStandardMaterial({ color: 0x8cf9ff, emissive: 0x046a98, emissiveIntensity: 3.6, roughness: .18, metalness: .35 })
+    new THREE.SphereGeometry(0.68, 18, 12),
+    new THREE.MeshStandardMaterial({ color: 0x8cf9ff, emissive: 0x046a98, emissiveIntensity: 3.6, roughness: 0.18, metalness: 0.35 })
   );
   const pupil = new THREE.Mesh(
-    new THREE.SphereGeometry(.22, 14, 10),
+    new THREE.SphereGeometry(0.22, 14, 10),
     new THREE.MeshBasicMaterial({ color: 0x17001d })
   );
-  pupil.position.z = .58;
+  pupil.position.z = 0.58;
   group.add(iris, pupil);
   const radius = TUNNEL_RADIUS - 1.45;
   positionOnTunnel(group, angle, radius);
   group.position.z = -108;
   group.rotation.z = angle - Math.PI / 2;
-  group.userData = { type: 'eye', angle, angularWidth: .2, radius, hp: 2, pulse: Math.random() * 8, hitRadius: .9, value: 250 };
+  group.userData = { type: 'eye', angle, angularWidth: 0.2, radius, hp: 2, pulse: Math.random() * 8, hitRadius: 0.9, value: 250 };
   world.add(group);
   hazards.push(group);
 }
 
 function createBlock() {
   const angle = Math.random() * Math.PI * 2;
-  const geometry = new THREE.DodecahedronGeometry(.82, 0);
-  const material = new THREE.MeshStandardMaterial({ color: 0xa855f7, emissive: 0x3a0764, emissiveIntensity: 2.2, roughness: .12, metalness: .75 });
+  const geometry = new THREE.DodecahedronGeometry(0.82, 0);
+  const material = new THREE.MeshStandardMaterial({ color: 0xa855f7, emissive: 0x3a0764, emissiveIntensity: 2.2, roughness: 0.12, metalness: 0.75 });
   const mesh = new THREE.Mesh(geometry, material);
   const radius = TUNNEL_RADIUS - 1.3;
   positionOnTunnel(mesh, angle, radius);
   mesh.position.z = -102;
-  mesh.userData = { type: 'block', angle, angularWidth: .16, radius, drift: (Math.random() > .5 ? 1 : -1) * (.25 + Math.random() * .4), hitRadius: 1.35, hp: 2, value: 90 };
+  mesh.userData = { type: 'block', angle, angularWidth: 0.16, radius, drift: (Math.random() > 0.5 ? 1 : -1) * (0.25 + Math.random() * 0.4), hitRadius: 1.35, hp: 2, value: 90 };
   world.add(mesh);
   hazards.push(mesh);
 }
 
 function createBlob() {
   const angle = Math.random() * Math.PI * 2;
-  const geometry = new THREE.IcosahedronGeometry(.62, 2);
+  const geometry = new THREE.IcosahedronGeometry(0.62, 2);
   const positionAttr = geometry.attributes.position;
   const noise = [];
   for (let i = 0; i < positionAttr.count; i += 1) {
     const vertex = new THREE.Vector3().fromBufferAttribute(positionAttr, i);
-    const offset = .82 + Math.random() * .4;
+    const offset = 0.82 + Math.random() * 0.4;
     vertex.normalize().multiplyScalar(offset);
     positionAttr.setXYZ(i, vertex.x, vertex.y, vertex.z);
-    noise.push(.5 + Math.random());
+    noise.push(0.5 + Math.random());
   }
   geometry.computeVertexNormals();
   const palette = [0x39ff8c, 0xff5d3d, 0xffe14d, 0x6bffe0];
   const color = palette[Math.floor(Math.random() * palette.length)];
-  const material = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.4, roughness: .55, metalness: .05, flatShading: true });
+  const material = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.4, roughness: 0.55, metalness: 0.05, flatShading: true });
   const mesh = new THREE.Mesh(geometry, material);
   const basePositions = positionAttr.array.slice();
-  const radius = TUNNEL_RADIUS - (1.1 + Math.random() * .9);
+  const radius = TUNNEL_RADIUS - (1.1 + Math.random() * 0.9);
   positionOnTunnel(mesh, angle, radius);
   mesh.position.z = -110;
   mesh.userData = {
-    type: 'blob', angle, angularWidth: .22, radius, hp: 2, value: 180,
-    drift: (Math.random() - .5) * .5, wobble: Math.random() * 10, hitRadius: .95,
+    type: 'blob', angle, angularWidth: 0.22, radius, hp: 2, value: 180,
+    drift: (Math.random() - 0.5) * 0.5, wobble: Math.random() * 10, hitRadius: 0.95,
     basePositions, noise
   };
   world.add(mesh);
@@ -237,18 +248,18 @@ function createBlob() {
 
 function spawnHazard() {
   const roll = Math.random();
-  if (roll < .3) createBarrier();
-  else if (roll < .5) createBlock();
-  else if (roll < .72) createEye();
+  if (roll < 0.3) createBarrier();
+  else if (roll < 0.5) createBlock();
+  else if (roll < 0.72) createEye();
   else createBlob();
 }
 
 function createCoin() {
   const angle = Math.random() * Math.PI * 2;
-  const geometry = new THREE.TorusGeometry(.26, .09, 8, 16);
-  const material = new THREE.MeshStandardMaterial({ color: 0xffe14d, emissive: 0xffb100, emissiveIntensity: 2.4, roughness: .2, metalness: .85 });
+  const geometry = new THREE.TorusGeometry(0.26, 0.09, 8, 16);
+  const material = new THREE.MeshStandardMaterial({ color: 0xffe14d, emissive: 0xffb100, emissiveIntensity: 2.4, roughness: 0.2, metalness: 0.85 });
   const mesh = new THREE.Mesh(geometry, material);
-  const radius = TUNNEL_RADIUS - (.9 + Math.random() * 1.6);
+  const radius = TUNNEL_RADIUS - (0.9 + Math.random() * 1.6);
   positionOnTunnel(mesh, angle, radius);
   mesh.position.z = -115;
   mesh.userData = { type: 'coin', angle, radius, value: 60, magnetized: false };
@@ -256,12 +267,11 @@ function createCoin() {
   coins.push(mesh);
 }
 
-// Единый метод создания снаряда с учётом урона оружия и углового разброса.
 function spawnProjectile(spreadOffset = 0) {
-  shipMuzzleFlash = .16;
+  shipMuzzleFlash = 0.16;
   const muzzleWorld = new THREE.Vector3();
   shipMuzzleFlare.getWorldPosition(muzzleWorld);
-  const geometry = new THREE.SphereGeometry(.14, 8, 8);
+  const geometry = new THREE.SphereGeometry(0.14, 8, 8);
   const material = new THREE.MeshBasicMaterial({ color: 0xd8ffff });
   const shot = new THREE.Mesh(geometry, material);
   shot.position.copy(muzzleWorld);
@@ -271,7 +281,6 @@ function spawnProjectile(spreadOffset = 0) {
   pulseLight.intensity = 10;
 }
 
-// Веерный залп: количество снарядов и разброс зависят от текущего уровня оружия.
 function fireVolley() {
   const half = (weapon.shots - 1) / 2;
   for (let i = 0; i < weapon.shots; i += 1) {
@@ -280,15 +289,12 @@ function fireVolley() {
   }
 }
 
-// Ручной выстрел по пробелу/клику — усиленный залп с собственным кулдауном.
 function fire() {
   if (state !== 'playing' || fireCooldown > 0) return;
-  fireCooldown = Math.max(.12, weapon.fireRate * .7);
+  fireCooldown = Math.max(0.12, weapon.fireRate * 0.7);
   fireVolley();
 }
 
-// Автоатака: корабль сам стреляет по расписанию, определяемому уровнем оружия,
-// независимо от ручного управления, пока враги находятся в туннеле.
 function updateAutoFire(dt) {
   autoFireCooldown = Math.max(0, autoFireCooldown - dt);
   if (autoFireCooldown > 0) return;
@@ -307,11 +313,11 @@ function removeEntity(entity, list) {
 function blast(position, color = 0x46e6ff, count = 10) {
   for (let i = 0; i < count; i += 1) {
     const particle = new THREE.Mesh(
-      new THREE.SphereGeometry(.045 + Math.random() * .06, 5, 5),
+      new THREE.SphereGeometry(0.045 + Math.random() * 0.06, 5, 5),
       new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 1 })
     );
     particle.position.copy(position);
-    particle.userData = { velocity: new THREE.Vector3((Math.random() - .5) * 8, (Math.random() - .5) * 8, (Math.random() - .5) * 6), life: .4 + Math.random() * .4 };
+    particle.userData = { velocity: new THREE.Vector3((Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 6), life: 0.4 + Math.random() * 0.4 };
     scene.add(particle);
     projectiles.push(particle);
   }
@@ -321,7 +327,7 @@ function damage(amount) {
   health = Math.max(0, health - amount);
   healthBar.style.width = `${health}%`;
   healthBar.style.background = health > 40 ? 'linear-gradient(90deg, #46e6ff, #c4ff51, #ff4fa3)' : 'linear-gradient(90deg, #ffcc4d, #ff3d70)';
-  shake = .36;
+  shake = 0.36;
   blast(worldPlayerPosition, 0xff4fa3, 18);
   if (health <= 0) endGame();
 }
@@ -329,7 +335,7 @@ function damage(amount) {
 function collectCoin(value) {
   score += value;
   coinsCollected += 1;
-  shipCollectPulse = .32;
+  shipCollectPulse = 0.32;
   if (coinsCollected >= COINS_PER_LEVEL) {
     coinsCollected -= COINS_PER_LEVEL;
     levelUp();
@@ -337,10 +343,9 @@ function collectCoin(value) {
   updateCoinHud();
 }
 
-// Повышение уровня обновляет и скорость мира, и параметры оружия по таблице WEAPON_LEVELS.
 function levelUp() {
   level += 1;
-  levelSpeedBoost = 1 + (level - 1) * .12;
+  levelSpeedBoost = 1 + (level - 1) * 0.12;
   weapon = weaponForLevel(level);
   levelNode.textContent = level.toString();
   levelBannerValue.textContent = level.toString();
@@ -363,15 +368,15 @@ function updatePlayer(dt) {
   playerAngle += playerAngularVelocity * dt;
 
   shipMuzzleFlash = Math.max(0, shipMuzzleFlash - dt);
-  const muzzleT = shipMuzzleFlash / .16;
+  const muzzleT = shipMuzzleFlash / 0.16;
   shipMuzzleFlare.material.opacity = muzzleT;
-  shipMuzzleFlare.scale.setScalar(.6 + muzzleT * 1.1);
+  shipMuzzleFlare.scale.setScalar(0.6 + muzzleT * 1.1);
   shipMuzzleLight.intensity = muzzleT * 4;
 
   shipCollectPulse = Math.max(0, shipCollectPulse - dt);
-  const collectT = shipCollectPulse / .32;
-  collectorRing.scale.setScalar(1 + collectT * .9);
-  collectorRing.material.opacity = .55 + collectT * .45;
+  const collectT = shipCollectPulse / 0.32;
+  collectorRing.scale.setScalar(1 + collectT * 0.9);
+  collectorRing.material.opacity = 0.55 + collectT * 0.45;
   collectorRing.rotation.z += dt * (3 + collectT * 10);
   shipBody.rotation.y += dt * 1.6;
 
@@ -380,7 +385,7 @@ function updatePlayer(dt) {
   camera.position.y = Math.sin(playerAngle) * cameraRadius - 3.1;
   camera.position.z = 6.6;
   camera.rotation.set(0, 0, 0);
-  camera.lookAt(0, -.55, -20);
+  camera.lookAt(0, -0.55, -20);
   camera.rotateZ(playerAngle - Math.PI / 2);
 
   player.getWorldPosition(worldPlayerPosition);
@@ -389,9 +394,12 @@ function updatePlayer(dt) {
 function updateTunnel(dt, speed) {
   for (const ring of tunnelRings) {
     ring.position.z += speed * dt;
-    ring.rotation.z += dt * (.24 + Math.sin(elapsed + ring.userData.phase) * .07);
-    ring.scale.setScalar(1 + Math.sin(elapsed * 2 + ring.userData.phase) * .045);
     if (ring.position.z > 9) ring.position.z -= 145.6;
+    const bend = tunnelBendOffset(ring.position.z);
+    ring.position.x = bend.x;
+    ring.position.y = bend.y;
+    ring.rotation.z += dt * (0.24 + Math.sin(elapsed + ring.userData.phase) * 0.07);
+    ring.scale.setScalar(1 + Math.sin(elapsed * 2 + ring.userData.phase) * 0.045);
   }
   for (const star of stars) {
     star.position.z += speed * dt * 1.2;
@@ -407,24 +415,24 @@ function updateHazards(dt, speed) {
       data.angle += (data.drift || 0) * dt;
       positionOnTunnel(hazard, data.angle, data.radius);
       hazard.rotation.z = data.angle + (data.type === 'barrier' ? Math.PI / 2 : 0);
-      hazard.rotation.x += (data.spin || .8) * dt;
-      hazard.rotation.y += .8 * dt;
+      hazard.rotation.x += (data.spin || 0.8) * dt;
+      hazard.rotation.y += 0.8 * dt;
     } else if (data.type === 'blob') {
       data.angle += (data.drift || 0) * dt;
       positionOnTunnel(hazard, data.angle, data.radius);
-      hazard.rotation.y += dt * .6;
-      hazard.rotation.x = Math.sin(elapsed * 1.6 + data.wobble) * .3;
+      hazard.rotation.y += dt * 0.6;
+      hazard.rotation.x = Math.sin(elapsed * 1.6 + data.wobble) * 0.3;
       const positionAttr = hazard.geometry.attributes.position;
       for (let i = 0; i < positionAttr.count; i += 1) {
         const bx = data.basePositions[i * 3];
         const by = data.basePositions[i * 3 + 1];
         const bz = data.basePositions[i * 3 + 2];
-        const pulse = 1 + Math.sin(elapsed * 3 + data.noise[i] * 6) * .14;
+        const pulse = 1 + Math.sin(elapsed * 3 + data.noise[i] * 6) * 0.14;
         positionAttr.setXYZ(i, bx * pulse, by * pulse, bz * pulse);
       }
       positionAttr.needsUpdate = true;
     } else {
-      hazard.scale.setScalar(1 + Math.sin(elapsed * 5 + data.pulse) * .14);
+      hazard.scale.setScalar(1 + Math.sin(elapsed * 5 + data.pulse) * 0.14);
       hazard.rotation.y += dt * 1.2;
     }
 
@@ -434,7 +442,7 @@ function updateHazards(dt, speed) {
     }
 
     const angularDistance = Math.abs(Math.atan2(Math.sin(playerAngle - data.angle), Math.cos(playerAngle - data.angle)));
-    if (hazard.position.z > -.8 && hazard.position.z < 2.1 && angularDistance < data.angularWidth + .15) {
+    if (hazard.position.z > -0.8 && hazard.position.z < 2.1 && angularDistance < data.angularWidth + 0.15) {
       damage(data.type === 'barrier' ? 32 : data.type === 'blob' ? 24 : 21);
       removeEntity(hazard, hazards);
     }
@@ -451,7 +459,7 @@ function updateCoins(dt, speed) {
     const angularDistance = Math.abs(Math.atan2(Math.sin(playerAngle - data.angle), Math.cos(playerAngle - data.angle)));
     const closeInDepth = coin.position.z > -4 && coin.position.z < 4;
 
-    if (!data.magnetized && closeInDepth && angularDistance < .7) {
+    if (!data.magnetized && closeInDepth && angularDistance < 0.7) {
       data.magnetized = true;
     }
 
@@ -477,7 +485,6 @@ function updateCoins(dt, speed) {
   }
 }
 
-// Урон снаряда теперь берётся из data.damage (зависит от уровня оружия на момент выстрела).
 function updateProjectiles(dt) {
   for (const projectile of [...projectiles]) {
     const data = projectile.userData;
@@ -499,8 +506,8 @@ function updateProjectiles(dt) {
     for (const hazard of [...hazards]) {
       const hazardData = hazard.userData;
       const angularDistance = Math.abs(Math.atan2(Math.sin(playerAngle + (data.angleOffset || 0) - hazardData.angle), Math.cos(playerAngle + (data.angleOffset || 0) - hazardData.angle)));
-      const depthClose = Math.abs(projectile.position.z - hazard.position.z) < hazardData.hitRadius + .4;
-      if (angularDistance < (hazardData.angularWidth || .25) + .22 && depthClose) {
+      const depthClose = Math.abs(projectile.position.z - hazard.position.z) < hazardData.hitRadius + 0.4;
+      if (angularDistance < (hazardData.angularWidth || 0.25) + 0.22 && depthClose) {
         hazardData.hp -= data.damage || 1;
         removeEntity(projectile, projectiles);
         pulseLight.intensity = 8;
@@ -537,8 +544,8 @@ function beginGame() {
   playerAngle = 0;
   playerAngularVelocity = 0;
   elapsed = 0;
-  spawnTimer = .8;
-  coinTimer = .4;
+  spawnTimer = 0.8;
+  coinTimer = 0.4;
   coinsCollected = 0;
   level = 1;
   levelSpeedBoost = 1;
@@ -575,9 +582,9 @@ function togglePause() {
 }
 
 function animate(time) {
-  const dt = Math.min((time - lastTime) / 1000 || 0, .05);
+  const dt = Math.min((time - lastTime) / 1000 || 0, 0.05);
   lastTime = time;
-  const ambientSpeed = state === 'playing' ? WORLD_SPEED * levelSpeedBoost * (1 + Math.min(elapsed / 90, .95)) : 2.6;
+  const ambientSpeed = state === 'playing' ? WORLD_SPEED * levelSpeedBoost * (1 + Math.min(elapsed / 90, 0.95)) : 2.6;
 
   if (state === 'playing') {
     elapsed += dt;
@@ -587,12 +594,12 @@ function animate(time) {
     spawnTimer -= dt;
     if (spawnTimer <= 0) {
       spawnHazard();
-      spawnTimer = Math.max(.4, 1.24 - elapsed * .007) + Math.random() * .5;
+      spawnTimer = Math.max(0.4, 1.24 - elapsed * 0.007) + Math.random() * 0.5;
     }
     coinTimer -= dt;
     if (coinTimer <= 0) {
       createCoin();
-      coinTimer = .5 + Math.random() * .6;
+      coinTimer = 0.5 + Math.random() * 0.6;
     }
     updatePlayer(dt);
     updateHazards(dt, ambientSpeed);
@@ -600,16 +607,16 @@ function animate(time) {
     updateProjectiles(dt);
     updateHud(ambientSpeed);
   } else {
-    collectorRing.rotation.z += dt * .5;
+    collectorRing.rotation.z += dt * 0.5;
     player.getWorldPosition(worldPlayerPosition);
   }
 
   updateTunnel(dt, ambientSpeed);
   pulseLight.intensity = THREE.MathUtils.damp(pulseLight.intensity, 5.5, 5, dt);
-  pulseLight.color.setHSL(.51 + Math.sin(time * .001) * .05, .95, .62);
+  pulseLight.color.setHSL(0.51 + Math.sin(time * 0.001) * 0.05, 0.95, 0.62);
   if (shake > 0) {
-    camera.position.x += (Math.random() - .5) * shake;
-    camera.position.y += (Math.random() - .5) * shake;
+    camera.position.x += (Math.random() - 0.5) * shake;
+    camera.position.y += (Math.random() - 0.5) * shake;
     shake = Math.max(0, shake - dt * 1.5);
   }
   renderer.render(scene, camera);
