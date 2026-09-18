@@ -38,11 +38,12 @@
             <stop offset="100%" stop-color="#c4ff51" />
           </radialGradient>
         </defs>
-        <circle id="ship-collect-ring" cx="60" cy="60" r="46" fill="none" stroke="#ffe14d" stroke-width="3" opacity="0" />
-        <path d="M60 8 L98 58 L78 58 L88 100 L60 68 L32 100 L42 58 L22 58 Z" fill="url(#shipBodyGradient)" stroke="#0af0ff" stroke-width="2.5" stroke-linejoin="round" />
-        <path d="M60 8 L98 58 L78 58 L60 40 Z" fill="#ff4fa3" opacity="0.75" />
-        <path d="M60 8 L22 58 L42 58 L60 40 Z" fill="#ff4fa3" opacity="0.55" />
-        <circle cx="60" cy="46" r="8" fill="url(#shipCoreGlow)" />
+        <circle id="ship-collect-ring" cx="60" cy="60" r="52" fill="none" stroke="#ffe14d" stroke-width="3" opacity="0" />
+        <polygon points="60,14 103.7,45.8 87,97.2 33,97.2 16.3,45.8" fill="url(#shipBodyGradient)" stroke="#0af0ff" stroke-width="2.5" stroke-linejoin="round" />
+        <polygon points="60,14 103.7,45.8 60,60" fill="#ff4fa3" opacity="0.55" />
+        <polygon points="60,14 16.3,45.8 60,60" fill="#ff4fa3" opacity="0.4" />
+        <polygon points="87,97.2 33,97.2 60,60" fill="#7118ff" opacity="0.5" />
+        <circle cx="60" cy="60" r="10" fill="url(#shipCoreGlow)" />
         <polygon id="ship-muzzle" points="52,20 60,2 68,20" fill="#d8ffff" opacity="0" />
       </svg>
     </div>
@@ -50,9 +51,9 @@
     <section id="start-screen" class="overlay active">
       <div class="panel">
         <p class="eyebrow">СОН № 07 / НЕСТАБИЛЬНЫЙ КОРИДОР</p>
-        <h1>ТУННЕЛЬНОЕ<br /><em>ДВИЖЕНИЕ</em></h1>
+        <h1>ТУННЕЛьНОЕ<br /><em>ДВИЖЕНИЕ</em></h1>
         <p class="intro">Поверни реальность. Пройди сквозь невозможную архитектуру. Собирай монеты. Стреляй в то, что смотрит в ответ.</p>
-        <button id="start-button" class="primary-button">ВОЙТИ В ТУННЕЛЬ</button>
+        <button id="start-button" class="primary-button">ВОЙТИ В ТУННЕЛь</button>
         <p class="controls">← → или A D — круговое движение · ПРОБЕЛ / клик — импульс · P — пауза</p>
       </div>
     </section>
@@ -61,15 +62,15 @@
       <div class="panel compact">
         <p class="eyebrow">ВРЕМЯ ЗАФИКСИРОВАНО</p>
         <h2>ПАУЗА</h2>
-        <button id="resume-button" class="primary-button">ПРОДОЛЖИТЬ</button>
+        <button id="resume-button" class="primary-button">ПРОДОЛЖИТь</button>
       </div>
     </section>
 
     <section id="gameover-screen" class="overlay">
       <div class="panel compact">
-        <p class="eyebrow">ТУННЕЛЬ СОМКНУЛСЯ</p>
-        <h2>СВЯЗЬ<br /><em>ПОТЕРЯНА</em></h2>
-        <p class="result">ФИНАЛЬНЫЙ СЧЁТ <strong id="final-score">000000</strong></p>
+        <p class="eyebrow">ТУННЕЛь СОМКНУЛСЯ</p>
+        <h2>СВЯЗь<br /><em>ПОТЕРЯНА</em></h2>
+        <p class="result">ФИНАЛьНЫЙ СЧЁТ <strong id="final-score">000000</strong></p>
         <button id="restart-button" class="primary-button">ВОЙТИ СНОВА</button>
         <p class="controls">Нажмите R для быстрого перезапуска</p>
       </div>

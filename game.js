@@ -45,6 +45,7 @@ const TUNNEL_RADIUS = 9.7;
 const PLAYER_RADIUS = 7.25;
 const WORLD_SPEED = 17;
 const COINS_PER_LEVEL = 10;
+const SHIP_BASE_RADIUS = 46;
 const keys = new Set();
 
 let state = 'menu';
@@ -344,7 +345,7 @@ function updateShipIcon(dt) {
   if (shipCollectRing) {
     const progress = 1 - collectFlash / .32;
     shipCollectRing.style.opacity = collectFlash > 0 ? (1 - progress).toString() : '0';
-    shipCollectRing.setAttribute('r', (30 + progress * 22).toString());
+    shipCollectRing.setAttribute('r', (SHIP_BASE_RADIUS + progress * 22).toString());
     shipCollectRing.setAttribute('stroke-width', (4 - progress * 3).toString());
   }
 }
