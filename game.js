@@ -4,6 +4,10 @@ const canvas = document.querySelector('#game-canvas');
 const scoreNode = document.querySelector('#score');
 const speedNode = document.querySelector('#speed');
 const healthBar = document.querySelector('#health-bar');
+const coinCountNode = document.querySelector('#coin-count');
+const levelNode = document.querySelector('#level');
+const levelBanner = document.querySelector('#level-banner');
+const levelBannerValue = document.querySelector('#level-banner-value');
 const startScreen = document.querySelector('#start-screen');
 const pauseScreen = document.querySelector('#pause-screen');
 const gameoverScreen = document.querySelector('#gameover-screen');
@@ -13,6 +17,8 @@ const startButton = document.querySelector('#start-button');
 const resumeButton = document.querySelector('#resume-button');
 const restartButton = document.querySelector('#restart-button');
 const shipIcon = document.querySelector('#ship-icon');
+const shipMuzzle = document.querySelector('#ship-muzzle');
+const shipCollectRing = document.querySelector('#ship-collect-ring');
 
 const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(0x080017, 0.018);
@@ -38,6 +44,7 @@ scene.add(magentaLight);
 const TUNNEL_RADIUS = 9.7;
 const PLAYER_RADIUS = 7.25;
 const WORLD_SPEED = 17;
+const COINS_PER_LEVEL = 10;
 const keys = new Set();
 
 let state = 'menu';
@@ -52,6 +59,10 @@ let elapsed = 0;
 let shake = 0;
 let lastTime = 0;
 let shipFlash = 0;
+let collectFlash = 0;
+let coinsCollected = 0;
+let level = 1;
+let levelSpeedBoost = 1;
 
 const projectiles = [];
 const hazards = [];
@@ -119,6 +130,7 @@ function positionOnTunnel(object, angle, radius = PLAYER_RADIUS) {
   object.position.y = Math.sin(angle) * radius;
 }
 
+// Барьер: разрушаемое препятствие, требует одного попадания.
 function createBarrier() {
   const angle = Math.random() * Math.PI * 2;
   const width = .3 + Math.random() * .26;
@@ -129,7 +141,7 @@ function createBarrier() {
   positionOnTunnel(mesh, angle, radius);
   mesh.position.z = -105;
   mesh.rotation.z = angle + Math.PI / 2;
-  mesh.userData = { type: 'barrier', angle, angularWidth: width, radius, drift: (Math.random() - .5) * .3, spin: (Math.random() - .5) * 2.2, hitRadius: 1.2 };
+  mesh.userData = { type: 'barrier', angle, angularWidth: width, radius, drift: (Math.random() - .5) * .3, spin: (Math.random() - .5) * 2.2, hitRadius: 1.2, hp: 1, value: 40 };
   world.add(mesh);
   hazards.push(mesh);
 }
@@ -156,6 +168,7 @@ function createEye() {
   hazards.push(group);
 }
 
+// Многогранник: разрушаемое препятствие, требует двух попаданий.
 function createBlock() {
   const angle = Math.random() * Math.PI * 2;
   const geometry = new THREE.DodecahedronGeometry(.82, 0);
@@ -164,7 +177,7 @@ function createBlock() {
   const radius = TUNNEL_RADIUS - 1.3;
   positionOnTunnel(mesh, angle, radius);
   mesh.position.z = -102;
-  mesh.userData = { type: 'block', angle, angularWidth: .16, radius, drift: (Math.random() > .5 ? 1 : -1) * (.25 + Math.random() * .4), hitRadius: .92 };
+  mesh.userData = { type: 'block', angle, angularWidth: .16, radius, drift: (Math.random() > .5 ? 1 : -1) * (.25 + Math.random() * .4), hitRadius: .92, hp: 2, value: 90 };
   world.add(mesh);
   hazards.push(mesh);
 }
@@ -265,6 +278,34 @@ function damage(amount) {
   if (health <= 0) endGame();
 }
 
+// Обработка сбора монеты: увеличивает счёт очков и прогресс до следующего уровня.
+function collectCoin(value) {
+  score += value;
+  coinsCollected += 1;
+  collectFlash = .32;
+  if (coinsCollected >= COINS_PER_LEVEL) {
+    coinsCollected -= COINS_PER_LEVEL;
+    levelUp();
+  }
+  updateCoinHud();
+}
+
+function levelUp() {
+  level += 1;
+  levelSpeedBoost = 1 + (level - 1) * .12;
+  levelNode.textContent = level.toString();
+  levelBannerValue.textContent = level.toString();
+  health = Math.min(100, health + 15);
+  healthBar.style.width = `${health}%`;
+  levelBanner.classList.remove('show');
+  void levelBanner.offsetWidth;
+  levelBanner.classList.add('show');
+}
+
+function updateCoinHud() {
+  coinCountNode.textContent = `${coinsCollected} / ${COINS_PER_LEVEL}`;
+}
+
 function updatePlayer(dt) {
   const left = keys.has('ArrowLeft') || keys.has('KeyA');
   const right = keys.has('ArrowRight') || keys.has('KeyD');
@@ -287,15 +328,25 @@ function updatePlayer(dt) {
   camera.rotateZ(playerAngle - Math.PI / 2);
 }
 
-// Обновление 2D-иконки корабля внизу экрана: наклон синхронизирован с угловой скоростью полёта.
+// Обновление 2D-иконки корабля внизу экрана: наклон, выстрел из носа и вспышка сбора монет.
 function updateShipIcon(dt) {
   if (!shipIcon) return;
   const tilt = THREE.MathUtils.clamp(-playerAngularVelocity * 9, -32, 32);
   const bob = state === 'playing' ? Math.sin(elapsed * 5) * 3 : Math.sin(elapsed * 1.4) * 2;
+  shipIcon.style.transform = `translateY(${bob}px) rotate(${tilt}deg)`;
+
   shipFlash = Math.max(0, shipFlash - dt);
   const glow = 12 + shipFlash * 40;
-  shipIcon.style.transform = `translateY(${bob}px) rotate(${tilt}deg)`;
   shipIcon.style.filter = `drop-shadow(0 0 ${glow}px rgba(70, 230, 255, .85)) drop-shadow(0 0 22px rgba(255, 79, 163, .35))`;
+  if (shipMuzzle) shipMuzzle.style.opacity = shipFlash > 0 ? Math.min(1, shipFlash * 6).toString() : '0';
+
+  collectFlash = Math.max(0, collectFlash - dt);
+  if (shipCollectRing) {
+    const progress = 1 - collectFlash / .32;
+    shipCollectRing.style.opacity = collectFlash > 0 ? (1 - progress).toString() : '0';
+    shipCollectRing.setAttribute('r', (30 + progress * 22).toString());
+    shipCollectRing.setAttribute('stroke-width', (4 - progress * 3).toString());
+  }
 }
 
 function updateTunnel(dt, speed) {
@@ -381,7 +432,7 @@ function updateCoins(dt, speed) {
     }
 
     if (coin.position.distanceTo(player.position) < .85) {
-      score += data.value;
+      collectCoin(data.value);
       blast(coin.position, 0xffe14d, 12);
       pulseLight.intensity = 9;
       removeEntity(coin, coins);
@@ -389,6 +440,7 @@ function updateCoins(dt, speed) {
   }
 }
 
+// Обработка попаданий снарядов: глаза и кляксы требуют hp-урона, барьеры и блоки разрушаются аналогично.
 function updateProjectiles(dt) {
   for (const projectile of [...projectiles]) {
     const data = projectile.userData;
@@ -408,14 +460,17 @@ function updateProjectiles(dt) {
     }
 
     for (const hazard of [...hazards]) {
-      if (hazard.userData.type !== 'eye' && hazard.userData.type !== 'blob') continue;
       if (projectile.position.distanceTo(hazard.position) < hazard.userData.hitRadius) {
         hazard.userData.hp -= 1;
         removeEntity(projectile, projectiles);
         pulseLight.intensity = 8;
         if (hazard.userData.hp <= 0) {
           score += hazard.userData.value;
-          blast(hazard.position, hazard.userData.type === 'blob' ? 0x39ff8c : 0x8cf9ff, 17);
+          const debrisColor = hazard.userData.type === 'blob' ? 0x39ff8c
+            : hazard.userData.type === 'barrier' ? 0xff3d9a
+            : hazard.userData.type === 'block' ? 0xa855f7
+            : 0x8cf9ff;
+          blast(hazard.position, debrisColor, 17);
           removeEntity(hazard, hazards);
         }
         break;
@@ -444,6 +499,11 @@ function beginGame() {
   elapsed = 0;
   spawnTimer = .8;
   coinTimer = .4;
+  coinsCollected = 0;
+  level = 1;
+  levelSpeedBoost = 1;
+  levelNode.textContent = '1';
+  updateCoinHud();
   healthBar.style.width = '100%';
   healthBar.style.background = 'linear-gradient(90deg, #46e6ff, #c4ff51, #ff4fa3)';
   state = 'playing';
@@ -475,7 +535,7 @@ function togglePause() {
 function animate(time) {
   const dt = Math.min((time - lastTime) / 1000 || 0, .05);
   lastTime = time;
-  const ambientSpeed = state === 'playing' ? WORLD_SPEED * (1 + Math.min(elapsed / 90, .95)) : 2.6;
+  const ambientSpeed = state === 'playing' ? WORLD_SPEED * levelSpeedBoost * (1 + Math.min(elapsed / 90, .95)) : 2.6;
 
   if (state === 'playing') {
     elapsed += dt;
@@ -538,5 +598,6 @@ restartButton.addEventListener('click', beginGame);
 makeTunnel();
 makeStars();
 positionOnTunnel(player, playerAngle);
+updateCoinHud();
 statusNode.textContent = 'ОЖИДАНИЕ ВХОДА';
 requestAnimationFrame(animate);
