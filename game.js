@@ -38,7 +38,6 @@ const TUNNEL_RADIUS = 9.7;
 const PLAYER_RADIUS = 7.25;
 const WORLD_SPEED = 17;
 const keys = new Set();
-const clock = new THREE.Clock();
 
 let state = 'menu';
 let score = 0;
@@ -370,7 +369,6 @@ function animate(time) {
     updateProjectiles(dt);
     updateHud(ambientSpeed);
   } else {
-    updateTunnel(dt, ambientSpeed);
     playerHalo.rotation.z += dt * .5;
   }
 
@@ -394,7 +392,10 @@ window.addEventListener('keydown', (event) => {
   if (event.code === 'KeyR' && state === 'gameover') beginGame();
 });
 window.addEventListener('keyup', (event) => keys.delete(event.code));
-window.addEventListener('pointerdown', () => fire());
+window.addEventListener('pointerdown', (event) => {
+  if (event.target.closest('button')) return;
+  fire();
+});
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
