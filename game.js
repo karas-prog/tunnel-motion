@@ -12,6 +12,7 @@ const statusNode = document.querySelector('#status');
 const startButton = document.querySelector('#start-button');
 const resumeButton = document.querySelector('#resume-button');
 const restartButton = document.querySelector('#restart-button');
+const shipIcon = document.querySelector('#ship-icon');
 
 const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(0x080017, 0.018);
@@ -50,6 +51,7 @@ let coinTimer = 0;
 let elapsed = 0;
 let shake = 0;
 let lastTime = 0;
+let shipFlash = 0;
 
 const projectiles = [];
 const hazards = [];
@@ -223,6 +225,7 @@ function createCoin() {
 function fire() {
   if (state !== 'playing' || fireCooldown > 0) return;
   fireCooldown = .17;
+  shipFlash = .18;
   const geometry = new THREE.SphereGeometry(.14, 8, 8);
   const material = new THREE.MeshBasicMaterial({ color: 0xd8ffff });
   const shot = new THREE.Mesh(geometry, material);
@@ -282,6 +285,17 @@ function updatePlayer(dt) {
   camera.rotation.z = THREE.MathUtils.damp(camera.rotation.z, playerAngle - Math.PI / 2, 5, dt);
   camera.lookAt(0, 0, -23);
   camera.rotateZ(playerAngle - Math.PI / 2);
+}
+
+// Обновление 2D-иконки корабля внизу экрана: наклон синхронизирован с угловой скоростью полёта.
+function updateShipIcon(dt) {
+  if (!shipIcon) return;
+  const tilt = THREE.MathUtils.clamp(-playerAngularVelocity * 9, -32, 32);
+  const bob = state === 'playing' ? Math.sin(elapsed * 5) * 3 : Math.sin(elapsed * 1.4) * 2;
+  shipFlash = Math.max(0, shipFlash - dt);
+  const glow = 12 + shipFlash * 40;
+  shipIcon.style.transform = `translateY(${bob}px) rotate(${tilt}deg)`;
+  shipIcon.style.filter = `drop-shadow(0 0 ${glow}px rgba(70, 230, 255, .85)) drop-shadow(0 0 22px rgba(255, 79, 163, .35))`;
 }
 
 function updateTunnel(dt, speed) {
@@ -486,6 +500,7 @@ function animate(time) {
     collectorRing.rotation.z += dt * .5;
   }
 
+  updateShipIcon(dt);
   updateTunnel(dt, ambientSpeed);
   pulseLight.intensity = THREE.MathUtils.damp(pulseLight.intensity, 5.5, 5, dt);
   pulseLight.color.setHSL(.51 + Math.sin(time * .001) * .05, .95, .62);

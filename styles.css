@@ -222,3 +222,47 @@ em { color: var(--pink); font-style: normal; text-shadow: 0 0 28px rgba(255,79,1
   .status { right: 12px; bottom: 12px; }
   .crosshair { transform: translate(-50%, -50%) scale(.78); }
 }
+
+.ship-indicator {
+  position: fixed;
+  z-index: 5;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.ship-icon {
+  width: 72px;
+  height: 60px;
+  filter: drop-shadow(0 0 12px rgba(70, 230, 255, .75)) drop-shadow(0 0 22px rgba(255, 79, 163, .35));
+  transition: transform .08s linear;
+}
+
+#ship-flame {
+  transform-origin: 60px 78px;
+  animation: shipFlameFlicker .18s infinite alternate ease-in-out;
+}
+
+@keyframes shipFlameFlicker {
+  from { transform: scaleY(1); opacity: .75; }
+  to { transform: scaleY(1.35); opacity: 1; }
+}
+
+.ship-label {
+  letter-spacing: .18em;
+  font-size: 9px;
+  font-weight: 700;
+  color: #cdb6ef;
+  text-shadow: 0 0 10px rgba(168, 85, 247, .6);
+}
+
+@media (max-width: 620px) {
+  .ship-indicator { bottom: 14px; gap: 4px; }
+  .ship-icon { width: 52px; height: 44px; }
+  .ship-label { font-size: 7px; }
+}
