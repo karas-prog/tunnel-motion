@@ -69,8 +69,8 @@ const tunnelRings = [];
 const stars = [];
 const worldPlayerPosition = new THREE.Vector3();
 
-// Единая 3D-модель игрока — подвешена к камере. Отодвинута дальше (Z=-5.6) и смещена
-// к верхнему краю кадра ближе к боковой стороне (X=1.6, Y=1.75), а не к центру.
+// Единая 3D-модель игрока — подвешена к камере. Масштаб всей модели уменьшен (0.62),
+// чтобы корабль визуально был компактнее относительно туннеля.
 const player = new THREE.Group();
 const shipBody = new THREE.Mesh(
   new THREE.ConeGeometry(.42, 1.15, 8),
@@ -98,6 +98,7 @@ const shipMuzzleLight = new THREE.PointLight(0xd8ffff, 0, 7, 2);
 shipMuzzleLight.position.z = -.85;
 player.add(shipBody, shipFin, collectorRing, shipMuzzleFlare, shipMuzzleLight);
 player.position.set(1.6, 1.75, -5.6);
+player.scale.setScalar(.62);
 camera.add(player);
 
 function makeTunnel() {
