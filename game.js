@@ -69,9 +69,8 @@ const tunnelRings = [];
 const stars = [];
 const worldPlayerPosition = new THREE.Vector3();
 
-// Единая 3D-модель игрока — ПОДВЕШЕНА К КАМЕРЕ, а не к сцене. Её локальная позиция/поворот
-// внутри камеры не меняются, поэтому на экране она абсолютно неподвижна при любом вращении камеры,
-// как прицел в шутере от первого лица. Мировая позиция для коллизий берётся через getWorldPosition().
+// Единая 3D-модель игрока — подвешена к камере. Смещена ВВЕРХ по локальной оси Y (1.35),
+// поэтому визуально корабль летит у верхней части туннеля, а не по центру кадра.
 const player = new THREE.Group();
 const shipBody = new THREE.Mesh(
   new THREE.ConeGeometry(.42, 1.15, 8),
@@ -98,7 +97,7 @@ shipMuzzleFlare.position.z = -.78;
 const shipMuzzleLight = new THREE.PointLight(0xd8ffff, 0, 7, 2);
 shipMuzzleLight.position.z = -.85;
 player.add(shipBody, shipFin, collectorRing, shipMuzzleFlare, shipMuzzleLight);
-player.position.set(0, -1.55, -3.4);
+player.position.set(0, 1.35, -3.4);
 camera.add(player);
 
 function makeTunnel() {
@@ -241,7 +240,6 @@ function createCoin() {
   coins.push(mesh);
 }
 
-// Снаряд стартует из мировой позиции носа корабля (getWorldPosition), а не из локальных координат.
 function fire() {
   if (state !== 'playing' || fireCooldown > 0) return;
   fireCooldown = .17;
@@ -313,8 +311,6 @@ function updateCoinHud() {
   coinCountNode.textContent = `${coinsCollected} / ${COINS_PER_LEVEL}`;
 }
 
-// Только камера вращается вокруг оси туннеля по playerAngle. Корабль — дочерний объект камеры
-// с постоянной локальной позицией, поэтому визуально он абсолютно статичен на экране.
 function updatePlayer(dt) {
   const left = keys.has('ArrowLeft') || keys.has('KeyA');
   const right = keys.has('ArrowRight') || keys.has('KeyD');
