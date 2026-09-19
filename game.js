@@ -44,6 +44,7 @@ const PLAYER_RADIUS = 7.25;
 const WORLD_SPEED = 17;
 const COINS_PER_LEVEL = 10;
 const keys = new Set();
+const isTouchDevice = window.matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
 
 const TUNNEL_BEND_AMOUNT = 1.5;
 const TUNNEL_BEND_FREQ = 0.045;
@@ -87,6 +88,10 @@ let coinsCollected = 0;
 let level = 1;
 let levelSpeedBoost = 1;
 let weapon = weaponForLevel(1);
+
+let touchSteerActive = false;
+let touchStartX = 0;
+let touchSteerInput = 0;
 
 const projectiles = [];
 const hazards = [];
@@ -363,7 +368,8 @@ function updateCoinHud() {
 function updatePlayer(dt) {
   const left = keys.has('ArrowLeft') || keys.has('KeyA');
   const right = keys.has('ArrowRight') || keys.has('KeyD');
-  const desired = (right ? -1 : 0) + (left ? 1 : 0);
+  const keyboardInput = (right ? -1 : 0) + (left ? 1 : 0);
+  const desired = keyboardInput !== 0 ? keyboardInput : touchSteerInput;
   playerAngularVelocity = THREE.MathUtils.damp(playerAngularVelocity, desired * 3.4, 10, dt);
   playerAngle += playerAngularVelocity * dt;
 
@@ -631,10 +637,39 @@ window.addEventListener('keydown', (event) => {
   if (event.code === 'KeyR' && state === 'gameover') beginGame();
 });
 window.addEventListener('keyup', (event) => keys.delete(event.code));
+
 window.addEventListener('pointerdown', (event) => {
+  if (isTouchDevice) return;
   if (event.target.closest('button')) return;
   fire();
 });
+
+let touchMoveDistance = 0;
+
+canvas.addEventListener('touchstart', (event) => {
+  if (state !== 'playing') return;
+  const touch = event.touches[0];
+  touchStartX = touch.clientX;
+  touchSteerActive = true;
+  touchMoveDistance = 0;
+}, { passive: true });
+
+canvas.addEventListener('touchmove', (event) => {
+  if (!touchSteerActive || state !== 'playing') return;
+  const touch = event.touches[0];
+  const deltaX = touch.clientX - touchStartX;
+  touchMoveDistance = Math.max(touchMoveDistance, Math.abs(deltaX));
+  const maxDrag = window.innerWidth * 0.28;
+  const normalized = THREE.MathUtils.clamp(deltaX / maxDrag, -1, 1);
+  touchSteerInput = -normalized;
+}, { passive: true });
+
+canvas.addEventListener('touchend', () => {
+  touchSteerActive = false;
+  touchSteerInput = 0;
+  if (touchMoveDistance < 12) fire();
+}, { passive: true });
+
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
